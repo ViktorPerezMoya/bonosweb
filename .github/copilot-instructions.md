@@ -14,10 +14,10 @@ You are helping build BonosWeb, a multi-tenant SaaS for electronic payslip signa
 
 ## 3. Business Logic Details
 - **Billing & Invoices:**
-  - Fixed monthly payment day (minimum 15th, adjusting to last day of month if needed, shifting weekends to the next business day using Carbon).
+  - Monthly payment day is fixed to a configured day that must be the 15th or later; if that day exceeds the month length, use the last day of the month, then shift weekend dates to the next business day using Carbon.
   - Dynamically calculates billing balance.
   - Applies inflation adjustments if checked.
-  - Generates invoices after the 15th.
+  - Generates invoices after the 15th using the computed monthly due date rules above.
   - Auto-suspends tenants after 2 weeks of overdue balance.
 - **PDF Signature Engine:** Uses `smalot/pdfparser` to parse employee CUIL for automatic mapping of uploaded ZIP batches. Uses `tecnickcom/tcpdf` for generating pdfs signed electronically using tenant-specific certificates (`cert_path` and `cert_key_path`).
 
