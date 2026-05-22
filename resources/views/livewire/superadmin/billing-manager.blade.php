@@ -244,15 +244,48 @@
                             @endif
                         </td>
                         <td>
-                            @if(!in_array($invoice->status, ['paid', 'cancelled']))
-                                <button wire:click="cancelInvoice({{ $invoice->id }})"
-                                    wire:confirm="¿Cancelar esta factura? Se reducirá el saldo del tenant."
+                            <div style="display: flex; gap: 0.4rem; align-items: center;" x-data>
+                                {{-- Adjuntar / Reemplazar PDF --}}
+                                <label
+                                    @click.prevent="$wire.set('targetInvoiceId', {{ $invoice->id }}).then(() => $refs.pdfInput.click())"
                                     class="btn"
-                                    style="background: rgba(239,68,68,0.12); color: var(--danger); padding: 0.35rem 0.6rem; font-size: 0.8rem;"
-                                    title="Cancelar factura">
-                                    <i class="ri-close-circle-line"></i> Cancelar
-                                </button>
-                            @endif
+                                    style="background: rgba(59,130,246,0.15); color: #60a5fa; padding: 0.35rem 0.6rem; font-size: 0.8rem; cursor: pointer;"
+                                    title="{{ $invoice->pdf_file_path ? 'Reemplazar PDF' : 'Adjuntar PDF de factura' }}">
+                                    <span wire:loading.remove wire:target="invoicePdf">
+                                        <i class="ri-{{ $invoice->pdf_file_path ? 'file-edit-line' : 'upload-2-line' }}"></i>
+                                    </span>
+                                    <span wire:loading wire:target="invoicePdf">
+                                        <i class="ri-loader-4-line"></i>
+                                    </span>
+                                </label>
+                                <input type="file"
+                                       x-ref="pdfInput"
+                                       wire:model="invoicePdf"
+                                       accept=".pdf"
+                                       style="display: none;">
+
+                                {{-- Ver PDF adjunto --}}
+                                @if($invoice->pdf_file_path)
+                                    <a href="{{ route('superadmin.invoice-pdf', ['invoiceId' => $invoice->id]) }}"
+                                       target="_blank"
+                                       class="btn"
+                                       style="background: rgba(16,185,129,0.15); color: var(--success); padding: 0.35rem 0.6rem; font-size: 0.8rem;"
+                                       title="Ver PDF adjunto">
+                                        <i class="ri-file-pdf-line"></i>
+                                    </a>
+                                @endif
+
+                                {{-- Cancelar factura --}}
+                                @if(!in_array($invoice->status, ['paid', 'cancelled']))
+                                    <button wire:click="cancelInvoice({{ $invoice->id }})"
+                                        wire:confirm="¿Cancelar esta factura? Se reducirá el saldo del tenant."
+                                        class="btn"
+                                        style="background: rgba(239,68,68,0.12); color: var(--danger); padding: 0.35rem 0.6rem; font-size: 0.8rem;"
+                                        title="Cancelar factura">
+                                        <i class="ri-close-circle-line"></i>
+                                    </button>
+                                @endif
+                            </div>
                         </td>
                     </tr>
                     @empty

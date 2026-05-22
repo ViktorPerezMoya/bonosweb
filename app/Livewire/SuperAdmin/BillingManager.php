@@ -2,6 +2,7 @@
 
 namespace App\Livewire\SuperAdmin;
 
+use App\Mail\InvoicePdfAttachedNotification;
 use App\Mail\MonthlyInvoiceNotification;
 use App\Models\GlobalSetting;
 use App\Models\Tenant;
@@ -11,11 +12,16 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 
 class BillingManager extends Component
 {
-    use WithPagination;
+    use WithPagination, WithFileUploads;
+
+    // Subida de PDF de factura
+    public $invoicePdf = null;
+    public ?int $targetInvoiceId = null;
 
     // Configuración global
     public float $inflationRate = 0;
@@ -294,6 +300,51 @@ class BillingManager extends Component
         }
 
         return $dueDate;
+    }
+
+    // ─── PDF de Factura ──────────────────────────────────────────────────────
+
+    public function updatedInvoicePdf(): void
+    {
+        if (!$this->targetInvoiceId) {
+            $this->invoicePdf = null;
+            return;
+        }
+
+        $this->validate([
+            'invoicePdf' => 'required|mimes:pdf|max:2048',
+        ], [
+            'invoicePdf.mimes' => 'El archivo debe ser un PDF.',
+            'invoicePdf.max'   => 'El PDF no puede superar los 2 MB.',
+        ]);
+
+        $invoice = TenantInvoice::findOrFail($this->targetInvoiceId);
+        $now     = Carbon::now();
+
+        $path = $this->invoicePdf->storeAs(
+            "invoices/{$now->format('Y-m')}",
+            "invoice_{$invoice->id}_{$now->format('YmdHis')}.pdf",
+            'local'
+        );
+
+        $invoice->pdf_file_path = $path;
+        $invoice->save();
+
+        // Notificar al admin del tenant por email con el PDF adjunto
+        $tenant     = Tenant::find($invoice->tenant_id);
+        $adminEmail = $tenant?->admin_email ?? null;
+        if ($adminEmail) {
+            try {
+                Mail::to($adminEmail)->send(new InvoicePdfAttachedNotification($tenant, $invoice));
+            } catch (\Exception $e) {
+                Log::error("updatedInvoicePdf: Error enviando email a tenant [{$invoice->tenant_id}]: " . $e->getMessage());
+            }
+        }
+
+        $this->invoicePdf      = null;
+        $this->targetInvoiceId = null;
+
+        session()->flash('message', "PDF adjuntado correctamente a la factura #{$invoice->id}.");
     }
 
     // ─── Render ──────────────────────────────────────────────────────────────

@@ -64,6 +64,31 @@ class TenantBilling extends Component
         session()->flash('message', 'Pago informado correctamente. El equipo de BonosWeb verificará y aprobará el comprobante a la brevedad.');
     }
 
+    public function downloadInvoice(int $invoiceId)
+    {
+        $tenantId = tenant('id');
+
+        // IDOR: verificar que la factura pertenece al tenant autenticado
+        $invoice = TenantInvoice::where('id', $invoiceId)
+            ->where('tenant_id', $tenantId)
+            ->firstOrFail();
+
+        abort_unless($invoice->pdf_file_path, 404);
+
+        // Los PDFs están en el storage CENTRAL (subidos por SuperAdmin).
+        // No se puede usar storage_path() porque FilesystemTenancyBootstrapper
+        // lo sufija a storage/tenantXXX/ en contexto tenant.
+        // base_path() nunca es sobreescrito por tenancy.
+        $absolutePath = base_path('storage/app/private/' . $invoice->pdf_file_path);
+        abort_unless(file_exists($absolutePath), 404);
+
+        $filename = 'factura_' . $invoice->period_year . '_' . str_pad($invoice->period_month, 2, '0', STR_PAD_LEFT) . '.pdf';
+
+        return response()->streamDownload(function () use ($absolutePath) {
+            readfile($absolutePath);
+        }, $filename, ['Content-Type' => 'application/pdf']);
+    }
+
     public function render()
     {
         $tenantId = tenant('id');

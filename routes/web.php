@@ -31,6 +31,17 @@ Route::group(['domain' => $domain, 'prefix' => $prefix], function () {
         Route::get('/admins', App\Livewire\SuperAdmin\AdminsManager::class)->name('superadmin.admins');
         Route::get('/billing', App\Livewire\SuperAdmin\BillingManager::class)->name('superadmin.billing');
 
+        // Visualización segura de PDF de factura adjunto por el SuperAdmin
+        Route::get('/invoices/{invoiceId}/pdf', function (int $invoiceId) {
+            $invoice = \App\Models\TenantInvoice::findOrFail($invoiceId);
+            abort_unless($invoice->pdf_file_path, 404);
+
+            $absolutePath = storage_path('app/private/' . $invoice->pdf_file_path);
+            abort_unless(file_exists($absolutePath), 404);
+
+            return response()->file($absolutePath);
+        })->name('superadmin.invoice-pdf');
+
         // Descarga segura de comprobantes de pago (solo SuperAdmin autenticado)
         Route::get('/receipts/{tenantId}/{filename}', function (string $tenantId, string $filename) {
             $tenantId = basename($tenantId);

@@ -161,6 +161,7 @@
                         <th>Monto</th>
                         <th>Vencimiento</th>
                         <th>Estado</th>
+                        <th>Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -186,10 +187,22 @@
                                 <span class="badge" style="background: rgba(245,158,11,0.2); color: var(--warning);">Pendiente</span>
                             @endif
                         </td>
+                        <td>
+                            @if($invoice->pdf_file_path)
+                                <button wire:click="downloadInvoice({{ $invoice->id }})"
+                                    class="btn"
+                                    style="background: rgba(59,130,246,0.15); color: #60a5fa; padding: 0.35rem 0.7rem; font-size: 0.8rem;"
+                                    title="Descargar factura PDF">
+                                    <i class="ri-download-2-line"></i> Descargar
+                                </button>
+                            @else
+                                <span style="color: var(--text-secondary); font-size: 0.8rem;">—</span>
+                            @endif
+                        </td>
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+                        <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 2rem;">
                             <i class="ri-file-line" style="font-size: 1.5rem; display: block; margin-bottom: 0.5rem;"></i>
                             Sin facturas generadas aún.
                         </td>

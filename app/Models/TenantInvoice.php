@@ -20,6 +20,7 @@ class TenantInvoice extends Model
         'amount',
         'due_date',
         'status',
+        'pdf_file_path',
     ];
 
     protected $casts = [
