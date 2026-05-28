@@ -17,8 +17,13 @@
             <input type="password" wire:model="password" class="form-control" placeholder="••••••••" required>
         </div>
 
-        <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; font-size: 1rem; padding: 0.75rem;">
-            Ingresar al Sistema
+        <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="login" style="width: 100%; justify-content: center; font-size: 1rem; padding: 0.75rem;">
+            <span wire:loading.remove wire:target="login">
+                Ingresar al Sistema
+            </span>
+            <span wire:loading wire:target="login">
+                <i class="ri-loader-4-line" style="display: inline-block; animation: spin 0.8s linear infinite; margin-right: 6px;"></i>Verificando...
+            </span>
         </button>
     </form>
 </div>

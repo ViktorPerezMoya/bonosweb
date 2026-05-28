@@ -20,7 +20,7 @@ class Dashboard extends Component
         if ($latestBatch) {
             $totalPayslips = $latestBatch->payslips->count();
             $signedPayslips = $latestBatch->payslips->filter(function($p) { return $p->signature !== null; })->count();
-            
+
             $latestBatchStats = [
                 'batch' => $latestBatch,
                 'total' => $totalPayslips,
@@ -33,7 +33,7 @@ class Dashboard extends Component
         return view('livewire.dashboard', [
             'totalEmployees' => User::where('role', 'employee')->count(),
             'totalBatches' => UploadBatch::count(),
-            'pendingSignatures' => Payslip::where('status', 'pending')->count(),
+            'pendingSignatures' => Payslip::where('status', 'pending')->where('is_rectified', false)->count(),
             'recentBatches' => UploadBatch::with('uploader')->latest()->take(5)->get(),
             'latestBatchStats' => $latestBatchStats
         ])->layout('components.layouts.app', ['header' => 'Dashboard', 'title' => 'Dashboard - BonosWeb']);

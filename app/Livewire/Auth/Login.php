@@ -22,7 +22,7 @@ class Login extends Component
 
         if (Auth::attempt(['email' => $this->email, 'password' => $this->password], $this->remember)) {
             session()->regenerate();
-            
+
             // Solo permitir acceso si es HR o Admin
             if(in_array(Auth::user()->role, ['hr', 'admin'])) {
                 return redirect()->intended('/dashboard');
@@ -39,6 +39,10 @@ class Login extends Component
 
     public function render()
     {
-        return view('livewire.auth.login')->layout('components.layouts.app');
+        $bgUrl = null;
+        if (function_exists('tenant') && $t = tenant()) {
+            $bgUrl = $t->loginBackgroundUrl();
+        }
+        return view('livewire.auth.login', ['bgUrl' => $bgUrl])->layout('components.layouts.app');
     }
 }

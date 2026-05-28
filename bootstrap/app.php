@@ -14,5 +14,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->group('universal', []);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Cuando la sesión del SuperAdmin expira, redirigir al login correcto
+        // en vez del default 'login' (que no existe y devuelve 404)
+        $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, $request) {
+            if (str_starts_with($request->path(), 'superadmin')) {
+                return redirect()->route('superadmin.login')
+                    ->with('status', 'Tu sesión ha expirado. Ingresá nuevamente.');
+            }
+        });
     })->create();

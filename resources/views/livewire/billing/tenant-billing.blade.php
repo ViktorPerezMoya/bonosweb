@@ -21,53 +21,101 @@
     </div>
     @endif
 
-    {{-- ── KPI Cards ── --}}
-    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.2rem; margin-bottom: 2rem;">
+    {{-- ── KPI Cards (carrusel móvil / grid escritorio) ── --}}
+    <div class="mb-8"
+         x-data="{
+             current: 0,
+             timer: null,
+             init() {
+                 this.timer = setInterval(() => {
+                     if (window.innerWidth < 640) this.goTo((this.current + 1) % 3);
+                 }, 3500);
+             },
+             destroy() { clearInterval(this.timer); },
+             goTo(i) {
+                 this.current = i;
+                 const card = this.$refs.track.children[i];
+                 if (card) this.$refs.track.scrollTo({ left: card.offsetLeft, behavior: 'smooth' });
+             },
+             onScroll() {
+                 const track = this.$refs.track;
+                 const w = track.offsetWidth || 1;
+                 const cards = Array.from(track.children);
+                 const center = track.scrollLeft + w / 2;
+                 let idx = 0, minD = Infinity;
+                 cards.forEach((c, i) => {
+                     const d = Math.abs(c.offsetLeft + c.offsetWidth / 2 - center);
+                     if (d < minD) { minD = d; idx = i; }
+                 });
+                 this.current = idx;
+             }
+         }">
 
-        {{-- Saldo corriente --}}
-        <div class="glass-panel" style="padding: 1.5rem;">
-            <h3 style="color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">
-                <i class="ri-scales-3-line"></i> Saldo Corriente
-            </h3>
-            <div style="font-size: 2rem; font-weight: 700; color: {{ $currentBalance > 0 ? 'var(--warning)' : 'var(--success)' }};">
-                $ {{ number_format($currentBalance, 2, ',', '.') }}
-            </div>
-            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.3rem;">
-                {{ $currentBalance > 0 ? 'Deuda pendiente de pago' : 'Sin deuda pendiente ✓' }}
-            </div>
-        </div>
+        <div x-ref="track"
+             @scroll.debounce.50ms="onScroll()"
+             class="flex gap-4 overflow-x-auto snap-x snap-mandatory
+                    sm:grid sm:grid-cols-3 sm:overflow-visible sm:snap-none sm:gap-5"
+             style="-webkit-overflow-scrolling: touch; scrollbar-width: none; -ms-overflow-style: none;">
 
-        {{-- Monto del servicio --}}
-        <div class="glass-panel" style="padding: 1.5rem;">
-            <h3 style="color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">
-                <i class="ri-service-line"></i> Cuota Mensual
-            </h3>
-            <div style="font-size: 2rem; font-weight: 700; color: white;">
-                $ {{ number_format($serviceAmount, 2, ',', '.') }}
-            </div>
-            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.3rem;">Importe base del servicio</div>
-        </div>
-
-        {{-- Próximo vencimiento --}}
-        <div class="glass-panel" style="padding: 1.5rem;">
-            <h3 style="color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">
-                <i class="ri-calendar-event-line"></i> Próximo Vencimiento
-            </h3>
-            @if($nextInvoice)
-                <div style="font-size: 1.5rem; font-weight: 700; color: {{ $nextInvoice->status === 'overdue' ? 'var(--danger)' : 'var(--warning)' }};">
-                    {{ \Carbon\Carbon::parse($nextInvoice->due_date)->format('d/m/Y') }}
+            {{-- Saldo corriente --}}
+            <div class="glass-panel flex-shrink-0 w-full snap-start" style="padding: 1.5rem;">
+                <h3 style="color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">
+                    <i class="ri-scales-3-line"></i> Saldo Corriente
+                </h3>
+                <div style="font-size: 2rem; font-weight: 700; color: {{ $currentBalance > 0 ? 'var(--warning)' : 'var(--success)' }};">
+                    $ {{ number_format($currentBalance, 2, ',', '.') }}
                 </div>
                 <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.3rem;">
-                    @if($nextInvoice->status === 'overdue')
-                        <span style="color: var(--danger);">⚠ VENCIDA hace {{ \Carbon\Carbon::parse($nextInvoice->due_date)->diffForHumans() }}</span>
-                    @else
-                        Vence {{ \Carbon\Carbon::parse($nextInvoice->due_date)->diffForHumans() }}
-                    @endif
+                    {{ $currentBalance > 0 ? 'Deuda pendiente de pago' : 'Sin deuda pendiente ✓' }}
                 </div>
-            @else
-                <div style="font-size: 1.2rem; font-weight: 600; color: var(--success);">Sin vencimientos</div>
-                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.3rem;">No hay facturas pendientes</div>
-            @endif
+            </div>
+
+            {{-- Cuota mensual --}}
+            <div class="glass-panel flex-shrink-0 w-full snap-start" style="padding: 1.5rem;">
+                <h3 style="color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">
+                    <i class="ri-service-line"></i> Cuota Mensual
+                </h3>
+                <div style="font-size: 2rem; font-weight: 700; color: white;">
+                    $ {{ number_format($serviceAmount, 2, ',', '.') }}
+                </div>
+                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.3rem;">Importe base del servicio</div>
+            </div>
+
+            {{-- Próximo vencimiento --}}
+            <div class="glass-panel flex-shrink-0 w-full snap-start" style="padding: 1.5rem;">
+                <h3 style="color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">
+                    <i class="ri-calendar-event-line"></i> Próximo Vencimiento
+                </h3>
+                @if($nextInvoice)
+                    <div style="font-size: 1.5rem; font-weight: 700; color: {{ $nextInvoice->status === 'overdue' ? 'var(--danger)' : 'var(--warning)' }};">
+                        {{ \Carbon\Carbon::parse($nextInvoice->due_date)->format('d/m/Y') }}
+                    </div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.3rem;">
+                        @if($nextInvoice->status === 'overdue')
+                            <span style="color: var(--danger);">⚠ VENCIDA hace {{ \Carbon\Carbon::parse($nextInvoice->due_date)->diffForHumans() }}</span>
+                        @else
+                            Vence {{ \Carbon\Carbon::parse($nextInvoice->due_date)->diffForHumans() }}
+                        @endif
+                    </div>
+                @else
+                    <div style="font-size: 1.2rem; font-weight: 600; color: var(--success);">Sin vencimientos</div>
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.3rem;">No hay facturas pendientes</div>
+                @endif
+            </div>
+
+        </div>
+
+        {{-- Dots indicadores (solo móvil) --}}
+        <div class="flex justify-center items-center gap-2 mt-3 sm:hidden">
+            <button @click="goTo(0)"
+                    :class="current === 0 ? 'w-5 bg-accent' : 'w-2 bg-white/30'"
+                    class="h-2 rounded-full transition-all duration-300 border-0 p-0 cursor-pointer"></button>
+            <button @click="goTo(1)"
+                    :class="current === 1 ? 'w-5 bg-accent' : 'w-2 bg-white/30'"
+                    class="h-2 rounded-full transition-all duration-300 border-0 p-0 cursor-pointer"></button>
+            <button @click="goTo(2)"
+                    :class="current === 2 ? 'w-5 bg-accent' : 'w-2 bg-white/30'"
+                    class="h-2 rounded-full transition-all duration-300 border-0 p-0 cursor-pointer"></button>
         </div>
     </div>
 

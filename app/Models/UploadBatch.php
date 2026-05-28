@@ -9,6 +9,7 @@ class UploadBatch extends Model
     protected $fillable = [
         'uploader_id',
         'original_filename',
+        'file_type',
         'period_year',
         'period_month',
         'liquidation_type',

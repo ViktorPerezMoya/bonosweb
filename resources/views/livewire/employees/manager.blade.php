@@ -1,6 +1,6 @@
 <div>
     <div class="glass-panel">
-        
+
         @if (session()->has('message'))
             <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid var(--success); color: var(--success); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 10px;">
                 <i class="ri-information-line" style="font-size: 1.2rem;"></i>
@@ -8,15 +8,14 @@
             </div>
         @endif
 
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
-            <div style="flex-grow: 1; max-width: 400px;">
-                <input type="text" wire:model.live.debounce.300ms="search" class="form-control" placeholder="Buscar por nombre, email o CUIL..." style="width: 100%;">
-            </div>
-            
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <button wire:click="openModal" class="btn btn-primary" style="font-size: 0.85rem;">
+        <div class="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
+            <div class="order-first sm:order-last">
+                <button wire:click="openModal" class="btn btn-primary w-full sm:w-auto">
                     <i class="ri-user-add-line" style="margin-right: 5px;"></i> Nuevo Empleado
                 </button>
+            </div>
+            <div class="w-full sm:flex-1 sm:max-w-sm">
+                <input type="text" wire:model.live.debounce.300ms="search" class="form-control" placeholder="Buscar por nombre, email o CUIL..." style="width: 100%;">
             </div>
         </div>
 
@@ -75,7 +74,7 @@
                 </tbody>
             </table>
         </div>
-        
+
         <div style="margin-top: 1.5rem;">
             {{ $employees->links() }}
         </div>
@@ -105,7 +104,7 @@
     <!-- Modal Form (CSS only approach for simplicity without external JS libraries) -->
     @if($showModal)
     <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px); z-index: 100; display: flex; align-items: center; justify-content: center;">
-        <div class="glass-panel" style="width: 100%; max-width: 500px; padding: 2rem; background: var(--bg-secondary);">
+        <div class="glass-panel" style="width: 100%; max-width: 500px; padding: 2rem; background: var(--bg-secondary); overflow: hidden;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                 <h3 style="margin: 0;">{{ $isEditing ? 'Editar Empleado' : 'Registrar Empleado' }}</h3>
                 <button wire:click="closeModal" style="background: none; border: none; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer;">&times;</button>
@@ -124,7 +123,7 @@
                     @error('email') <span style="color: var(--danger); font-size: 0.8rem;">{{ $message }}</span> @enderror
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem;">
                     <div class="form-group">
                         <label class="form-label">CUIL (Sin guiones)</label>
                         <input type="text" wire:model="cuil" class="form-control" placeholder="20123456789">

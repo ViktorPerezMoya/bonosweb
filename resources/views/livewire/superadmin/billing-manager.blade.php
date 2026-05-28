@@ -100,10 +100,10 @@
                 <i class="ri-building-4-line" style="color: var(--accent);"></i> Estado de Cuenta por Empresa
             </h3>
             <div style="display: flex; gap: 0.75rem; align-items: center;">
-                <select wire:model.live="filterStatus" style="background: rgba(255,255,255,0.07); color: var(--text-primary); border: 1px solid var(--glass-border); border-radius: 8px; padding: 0.4rem 0.8rem; font-size: 0.85rem;">
-                    <option value="">Todos</option>
-                    <option value="active">Activas</option>
-                    <option value="suspended">Suspendidas</option>
+                <select wire:model.live="filterStatus" style="background: #1e293b; color: #f1f5f9; border: 1px solid var(--glass-border); border-radius: 8px; padding: 0.4rem 0.8rem; font-size: 0.85rem; cursor: pointer;">
+                    <option value="" style="background: #1e293b; color: #f1f5f9;">Todos</option>
+                    <option value="active" style="background: #1e293b; color: #f1f5f9;">Activas</option>
+                    <option value="suspended" style="background: #1e293b; color: #f1f5f9;">Suspendidas</option>
                 </select>
             </div>
         </div>
@@ -199,12 +199,12 @@
             <h3 style="margin: 0; font-size: 1rem;">
                 <i class="ri-file-list-3-line" style="color: var(--accent);"></i> Historial de Facturas
             </h3>
-            <select wire:model.live="filterStatus" style="background: rgba(255,255,255,0.07); color: var(--text-primary); border: 1px solid var(--glass-border); border-radius: 8px; padding: 0.4rem 0.8rem; font-size: 0.85rem;">
-                <option value="">Todos los estados</option>
-                <option value="pending">Pendiente</option>
-                <option value="paid">Pagada</option>
-                <option value="overdue">Vencida</option>
-                <option value="cancelled">Cancelada</option>
+            <select wire:model.live="filterStatus" style="background: #1e293b; color: #f1f5f9; border: 1px solid var(--glass-border); border-radius: 8px; padding: 0.4rem 0.8rem; font-size: 0.85rem; cursor: pointer;">
+                <option value="" style="background: #1e293b; color: #f1f5f9;">Todos los estados</option>
+                <option value="pending" style="background: #1e293b; color: #f1f5f9;">Pendiente</option>
+                <option value="paid" style="background: #1e293b; color: #f1f5f9;">Pagada</option>
+                <option value="overdue" style="background: #1e293b; color: #f1f5f9;">Vencida</option>
+                <option value="cancelled" style="background: #1e293b; color: #f1f5f9;">Cancelada</option>
             </select>
         </div>
         <div style="overflow-x: auto;">

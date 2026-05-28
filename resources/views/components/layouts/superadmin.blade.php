@@ -4,16 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ $title ?? 'SuperAdmin - BonosWeb' }}</title>
-    
+
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;700&display=swap" rel="stylesheet">
-    
+
     <!-- Remix Icons -->
     <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
-    
+
     <!-- Global Custom CSS -->
     <link rel="stylesheet" href="{{ asset('css/app.css') }}">
-    
+
     @livewireStyles
     <style>
         /* Specific tweaks for SuperAdmin theme (a bit more "dark purple/gold" to distinguish it) */
@@ -21,7 +21,7 @@
             --accent: #8b5cf6; /* Purple for central admin */
             --accent-hover: #7c3aed;
         }
-        
+
         .super-sidebar {
             width: 250px;
             background: rgba(15, 23, 42, 0.7);
@@ -33,7 +33,7 @@
             position: fixed;
             height: 100vh;
         }
-        
+
         .super-brand {
             font-family: 'Outfit', sans-serif;
             font-size: 1.5rem;
@@ -73,12 +73,17 @@
             color: var(--danger);
             transition: all 0.2s ease;
         }
-        
+
         .btn-logout:hover {
             background: rgba(239, 68, 68, 0.2);
             color: #f87171;
             box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
             transform: translateY(-1px);
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -88,7 +93,7 @@
             <div class="super-brand">
                 <i class="ri-global-line" style="color: var(--accent);"></i> Central Admin
             </div>
-            
+
             <nav style="flex-grow: 1;">
                 <a href="{{ route('superadmin.tenants') }}" class="super-nav-item {{ request()->routeIs('superadmin.tenants') ? 'active' : '' }}">
                     <i class="ri-building-4-line"></i> Empresas (Tenants)
@@ -101,7 +106,7 @@
                     <i class="ri-money-dollar-circle-line"></i> Cobros y Facturación
                 </a>
             </nav>
-            
+
             <div style="padding: 1.5rem; border-top: 1px solid var(--glass-border);">
                 <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
                     Logueado como:<br>

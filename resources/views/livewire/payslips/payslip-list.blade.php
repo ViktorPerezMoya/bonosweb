@@ -1,13 +1,14 @@
 <div>
     <div class="glass-panel">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-            <div style="flex-grow: 1; max-width: 400px;">
+        <div class="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
+            <div class="order-first sm:order-last">
+                <a href="/payslips/upload" class="btn btn-primary w-full sm:w-auto">
+                    <i class="ri-upload-line" style="margin-right: 5px;"></i> Subir Nuevo Lote
+                </a>
+            </div>
+            <div class="w-full sm:flex-1 sm:max-w-sm">
                 <input type="text" wire:model.live.debounce.300ms="search" class="form-control" placeholder="Buscar por nombre de archivo..." style="width: 100%;">
             </div>
-            
-            <a href="/payslips/upload" class="btn btn-primary" style="font-size: 0.85rem;">
-                <i class="ri-upload-line" style="margin-right: 5px;"></i> Subir Nuevo Lote
-            </a>
         </div>
 
         <div style="overflow-x: auto;">
@@ -28,7 +29,7 @@
                     <tr>
                         <td style="color: var(--text-secondary);">#{{ $batch->id }}</td>
                         <td style="font-weight: 500;">
-                            <i class="ri-file-zip-line" style="color: var(--accent); margin-right: 5px;"></i> 
+                            <i class="ri-file-zip-line" style="color: var(--accent); margin-right: 5px;"></i>
                             {{ $batch->original_filename }}
                         </td>
                         <td style="color: var(--text-secondary);">{{ $batch->uploader->name ?? 'Sistema' }}</td>
@@ -77,7 +78,7 @@
                 </tbody>
             </table>
         </div>
-        
+
         <div style="margin-top: 1.5rem;">
             {{ $batches->links() }}
         </div>
