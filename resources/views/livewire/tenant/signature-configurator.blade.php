@@ -78,12 +78,14 @@
     </div>
 
     {{-- ══ PANEL: Canvas interactivo ══════════════════════════════════════════ --}}
-    <div class="glass-panel"
+    <div class="glass-panel" style="margin-bottom: 1.5rem;"
         x-data="sigCanvas(@js([
             'xMm'        => $sigXmm,
             'yMm'        => $sigYmm,
             'wMm'        => $sigWmm,
             'hMm'        => $sigHmm,
+            'pageW'      => $pageWmm,
+            'pageH'      => $pageHmm,
             'previewUrl' => $previewAvailable ? route('signature.preview') . '?v=' . time() : null,
             'sigUrl'     => $signatureAvailable ? route('signature.image') . '?v=' . time() : null,
         ]))"
@@ -120,7 +122,7 @@
                 style="display: inline-flex; align-items: center; gap: 5px; font-size: 0.8rem; color: #f59e0b; background: rgba(245,158,11,0.1); border: 1px solid #f59e0b; padding: 0.25rem 0.6rem; border-radius: 20px;">
                 <i class="ri-loader-4-line" style="animation: spin 0.6s linear infinite; display: inline-block;"></i> Guardando...
             </span>
-            @if($sigXmm !== null && !$previewAvailable)
+            @if($sigConfigured && !$previewAvailable)
                 <span style="margin-left: 0.5rem; font-size: 0.78rem; color: var(--text-secondary);">
                     <i class="ri-information-line"></i> Subí un PDF de muestra para ver el contexto visual.
                 </span>
@@ -137,8 +139,8 @@
                 @if($previewAvailable)
                     <canvas x-ref="pdfCanvas" style="display: block; width: 100%; pointer-events: none; user-select: none;"></canvas>
                 @else
-                    {{-- Fallback: hoja en blanco A4 --}}
-                    <div style="padding-bottom: calc(297/210 * 100%);"></div>
+                    {{-- Fallback: hoja en blanco con aspect-ratio real de la página --}}
+                    <div :style="`padding-bottom: ${(pageH/pageW)*100}%`"></div>
                     <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 0.5rem; color: #ccc;">
                         <i class="ri-file-line" style="font-size: 3rem; opacity: 0.3;"></i>
                         <span style="font-size: 0.75rem; opacity: 0.5;">Sin previsualización</span>
@@ -189,13 +191,69 @@
 
     </div>{{-- /glass-panel canvas --}}
 
+    {{-- ══ PANEL: Texto ancla ══════════════════════════════════════════════════ --}}
+    <div class="glass-panel" style="margin-bottom: 1.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.4rem;">
+            <i class="ri-anchor-line" style="font-size: 1.2rem; color: var(--accent);"></i>
+            <h3 style="margin: 0; font-size: 1rem;">Texto Ancla de Posicionamiento</h3>
+        </div>
+        <p style="color: var(--text-secondary); font-size: 0.83rem; margin-bottom: 1.25rem;">
+            Si se configura, el sistema buscará esta cadena de texto en cada recibo y posicionará
+            la firma justo arriba del lugar donde aparece, ignorando las coordenadas del canvas.
+            Dejá vacío para usar únicamente la posición arrastrada.
+        </p>
+
+        <form wire:submit.prevent="saveAnchorText" style="display: flex; flex-direction: column; gap: 0.75rem; max-width: 480px;">
+            <div>
+                <label for="anchorInput" style="display: block; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.35rem;">
+                    Texto a buscar en el PDF
+                </label>
+                <input
+                    id="anchorInput"
+                    type="text"
+                    wire:model="anchorText"
+                    placeholder="Ej: Firma del Empleador"
+                    maxlength="255"
+                    style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: var(--radius-sm); padding: 0.5rem 0.75rem; color: var(--text-primary); font-size: 0.88rem; outline: none;">
+                @error('anchorText')
+                    <p style="color: var(--danger); font-size: 0.78rem; margin-top: 0.3rem;">{{ $message }}</p>
+                @enderror
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                <button type="submit" class="btn btn-primary"
+                        style="font-size: 0.85rem; padding: 0.45rem 1.1rem;"
+                        wire:loading.attr="disabled" wire:target="saveAnchorText">
+                    <span wire:loading.remove wire:target="saveAnchorText">
+                        <i class="ri-save-line"></i> Guardar
+                    </span>
+                    <span wire:loading wire:target="saveAnchorText">
+                        <i class="ri-loader-4-line" style="animation: spin 0.8s linear infinite; display: inline-block;"></i>
+                    </span>
+                </button>
+
+                @if($anchorText)
+                    <span style="font-size: 0.78rem; color: var(--text-secondary);">
+                        <i class="ri-anchor-line" style="color: var(--accent);"></i>
+                        Activo: <em>{{ $anchorText }}</em>
+                    </span>
+                @else
+                    <span style="font-size: 0.78rem; color: var(--text-secondary);">
+                        <i class="ri-map-pin-line"></i> Usando posición del canvas (sin texto ancla).
+                    </span>
+                @endif
+            </div>
+        </form>
+    </div>{{-- /glass-panel anchor --}}
+
     {{-- ══ Alpine.js: componente sigCanvas ══════════════════════════════════════ --}}
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
     document.addEventListener('alpine:init', () => {
         Alpine.data('sigCanvas', (cfg) => ({
-            // ── Dimensiones de referencia A4 (mm) ────────────────────────────
-            A4W: 210, A4H: 297,
+            // ── Dimensiones de referencia de la página (mm) ───────────────────
+            pageW: cfg.pageW ?? 210,
+            pageH: cfg.pageH ?? 297,
 
             // ── Posición/tamaño del recuadro en px de pantalla ───────────────
             sigX: 0, sigY: 0, sigW: 0, sigH: 0,
@@ -228,7 +286,12 @@
                 }
 
                 // Re-renderizar cuando se sube un nuevo PDF
-                window.addEventListener('preview-ready', () => {
+                window.addEventListener('preview-ready', (e) => {
+                    // Actualizar dimensiones de página detectadas por FPDI
+                    if (e.detail && e.detail.pageW) {
+                        this.pageW = e.detail.pageW;
+                        this.pageH = e.detail.pageH;
+                    }
                     this.$nextTick(() =>
                         this.renderPdf('/configuracion/firma/preview-image?v=' + Date.now())
                     );
@@ -274,10 +337,10 @@
                 const w = canvas.offsetWidth;
                 if (w === 0) return; // contenedor no visible aún
 
-                // Siempre proporciones A4 para el sistema de coordenadas.
+                // Siempre proporciones reales de la página para el sistema de coordenadas.
                 // NO leer canvas.offsetHeight: el <canvas> de PDF.js tiene 150px
                 // por defecto antes de renderizar, lo que corrompe el cálculo px↔mm.
-                const h = Math.round(w * (this.A4H / this.A4W));
+                const h = Math.round(w * (this.pageH / this.pageW));
 
                 // Sin previsualización PDF hay que imponer la altura manualmente
                 if (!cfg.previewUrl) {
@@ -289,17 +352,12 @@
                 this.cH = h;
 
                 if (prevCW === 0) {
-                    // Primera vez: convertir mm guardados → px
-                    if (cfg.xMm !== null) {
-                        this.sigX = (cfg.xMm / this.A4W) * this.cW;
-                        this.sigY = (cfg.yMm / this.A4H) * this.cH;
-                    } else {
-                        // Posición por defecto: inferior izquierdo
-                        this.sigX = this.cW * 0.05;
-                        this.sigY = this.cH * 0.72;
-                    }
-                    this.sigW = (cfg.wMm / this.A4W) * this.cW;
-                    this.sigH = (cfg.hMm / this.A4H) * this.cH;
+                    // Primera vez: convertir mm → px.
+                    // sigXmm/sigYmm siempre son números (0.0 = nuevo tenant → esquina sup-izq).
+                    this.sigX = Math.max(0, (cfg.xMm / this.pageW) * this.cW);
+                    this.sigY = Math.max(0, (cfg.yMm / this.pageH) * this.cH);
+                    this.sigW = Math.max(10, (cfg.wMm / this.pageW) * this.cW);
+                    this.sigH = Math.max(8,  (cfg.hMm / this.pageH) * this.cH);
                 } else if (prevCW !== w) {
                     // Resize de ventana: reescalar posición proporcionalmente
                     const ratio = w / prevCW;
@@ -363,10 +421,10 @@
             },
 
             // ── Getters: mostrar mm en la UI ──────────────────────────────────
-            get xMmDisplay() { return this.cW ? ((this.sigX / this.cW) * this.A4W).toFixed(1) : '—'; },
-            get yMmDisplay() { return this.cH ? ((this.sigY / this.cH) * this.A4H).toFixed(1) : '—'; },
-            get wMmDisplay() { return this.cW ? ((this.sigW / this.cW) * this.A4W).toFixed(1) : '—'; },
-            get hMmDisplay() { return this.cH ? ((this.sigH / this.cH) * this.A4H).toFixed(1) : '—'; },
+            get xMmDisplay() { return this.cW ? ((this.sigX / this.cW) * this.pageW).toFixed(1) : '—'; },
+            get yMmDisplay() { return this.cH ? ((this.sigY / this.cH) * this.pageH).toFixed(1) : '—'; },
+            get wMmDisplay() { return this.cW ? ((this.sigW / this.cW) * this.pageW).toFixed(1) : '—'; },
+            get hMmDisplay() { return this.cH ? ((this.sigH / this.cH) * this.pageH).toFixed(1) : '—'; },
         }));
     });
     </script>

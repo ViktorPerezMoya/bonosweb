@@ -112,6 +112,25 @@ p { line-height: 1.5; color: var(--text-secondary); }
     scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
+/* ── Scrollbar estilizado para modales y paneles con overflow ── */
+.scroll-styled {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(139, 92, 246, 0.4) transparent;
+}
+.scroll-styled::-webkit-scrollbar {
+    width: 5px;
+}
+.scroll-styled::-webkit-scrollbar-track {
+    background: transparent;
+}
+.scroll-styled::-webkit-scrollbar-thumb {
+    background: rgba(139, 92, 246, 0.4);
+    border-radius: 9999px;
+}
+.scroll-styled::-webkit-scrollbar-thumb:hover {
+    background: rgba(139, 92, 246, 0.7);
+}
+
 .nav-link {
     display: flex;
     align-items: center;

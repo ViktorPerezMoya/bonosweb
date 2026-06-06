@@ -2,9 +2,12 @@
 
 namespace App\Jobs;
 
+use App\Models\Company;
 use App\Models\UploadBatch;
 use App\Models\Payslip;
 use App\Models\EmployeeProfile;
+use App\Models\Scopes\CurrentCompanyScope;
+use App\Services\PdfCoordinateExtractor;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -12,7 +15,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use setasign\Fpdi\Tcpdf\Fpdi;
+use App\Pdf\CustomFpdi;
 use Smalot\PdfParser\Parser;
 use ZipArchive;
 use Exception;
@@ -23,14 +26,16 @@ class ProcessPayslipBatch implements ShouldQueue
 
     protected $batch;
     protected $filePath;
+    protected int $companyId;
     protected array|null $sigConfig = null;
 
     public $timeout = 3600;
 
-    public function __construct(UploadBatch $batch, string $filePath)
+    public function __construct(UploadBatch $batch, string $filePath, int $companyId)
     {
-        $this->batch    = $batch;
-        $this->filePath = $filePath;
+        $this->batch     = $batch;
+        $this->filePath  = $filePath;
+        $this->companyId = $companyId;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -39,15 +44,18 @@ class ProcessPayslipBatch implements ShouldQueue
 
     public function handle(): void
     {
-        // Cargar configuración del Tenant una sola vez antes del bucle de procesamiento
-        $this->loadSignatureConfig();
+        // Carga el modelo Company explícito (sin session/scope) y configura la firma
+        $company = Company::withoutGlobalScope(CurrentCompanyScope::class)
+            ->findOrFail($this->companyId);
+
+        $this->loadSignatureConfig($company);
 
         $this->batch->update(['status' => 'processing']);
 
         if ($this->batch->file_type === 'pdf') {
-            $this->handleMassivePdf();
+            $this->handleMassivePdf($company);
         } else {
-            $this->handleZip();
+            $this->handleZip($company);
         }
     }
 
@@ -55,7 +63,7 @@ class ProcessPayslipBatch implements ShouldQueue
     // Estrategia ZIP (lógica original preservada íntegramente)
     // ─────────────────────────────────────────────────────────────────────────
 
-    protected function handleZip(): void
+    protected function handleZip(Company $company): void
     {
         $zipFullPath = Storage::disk('local')->path($this->filePath);
         $extractDir  = 'batches/extracted_' . $this->batch->id;
@@ -82,7 +90,7 @@ class ProcessPayslipBatch implements ShouldQueue
 
         $this->batch->update(['total_files' => count($pdfFiles)]);
 
-        $employerCuit = $this->getEmployerCuit();
+        $employerCuit = $this->getEmployerCuit($company);
         $pdfParser    = new Parser();
         $errors       = [];
         $processed    = 0;
@@ -127,7 +135,7 @@ class ProcessPayslipBatch implements ShouldQueue
     // Estrategia PDF masivo (nueva logica)
     // ─────────────────────────────────────────────────────────────────────────
 
-    protected function handleMassivePdf(): void
+    protected function handleMassivePdf(Company $company): void
     {
         $fullPdfPath = Storage::disk('local')->path($this->filePath);
         $extractDir  = 'batches/extracted_' . $this->batch->id;
@@ -154,13 +162,19 @@ class ProcessPayslipBatch implements ShouldQueue
 
         $this->batch->update(['total_files' => $pageCount]);
 
-        $employerCuit = $this->getEmployerCuit();
+        $employerCuit = $this->getEmployerCuit($company);
         $errors       = [];
         $processed    = 0;
 
         for ($pageNo = 1; $pageNo <= $pageCount; $pageNo++) {
             try {
                 $pageText = $pages[$pageNo - 1]->getText();
+
+                // Liberar el objeto Page de memoria tan pronto como sea posible.
+                // En PDFs masivos de cientos de páginas esto evita agotar la RAM del worker.
+                // Nota: la búsqueda de ancla de texto se realiza después sobre el PDF
+                // individual ya extraído (coordenadas consistentes con el CTM de FPDI).
+                unset($pages[$pageNo - 1]);
 
                 [$cuil, $rawCuil] = $this->extractEmployeeCuil($pageText, $employerCuit);
 
@@ -214,7 +228,7 @@ class ProcessPayslipBatch implements ShouldQueue
     protected function extractSinglePage(string $sourcePath, int $pageNo, string $extractDir): ?string
     {
         try {
-            $fpdi = new Fpdi();
+            $fpdi = new CustomFpdi();
             $fpdi->setSourceFile($sourcePath);
 
             $templateId = $fpdi->importPage($pageNo);
@@ -242,9 +256,9 @@ class ProcessPayslipBatch implements ShouldQueue
     // Metodos compartidos
     // ─────────────────────────────────────────────────────────────────────────
 
-    protected function getEmployerCuit(): string
+    protected function getEmployerCuit(Company $company): string
     {
-        return preg_replace('/\D/', '', tenant('employer_cuit') ?? '');
+        return preg_replace('/\D/', '', $company->cuit ?? '');
     }
 
     /**
@@ -274,8 +288,13 @@ class ProcessPayslipBatch implements ShouldQueue
 
     protected function findEmployeeProfile(string $cuil, string $rawCuil): ?EmployeeProfile
     {
-        return EmployeeProfile::where('cuil', $cuil)
-            ->orWhere('cuil', $rawCuil)
+        // El scope de empresa activa no aplica en jobs (no hay sesión HTTP).
+        // Filtramos explícitamente por company_id para encontrar el perfil correcto.
+        // Defensive: si $this->companyId es 0 (null coercionado), usar el company_id del batch.
+        $cid = $this->companyId ?: ($this->batch->company_id ?? null);
+        return EmployeeProfile::withoutGlobalScope(CurrentCompanyScope::class)
+            ->where('company_id', $cid)
+            ->where(fn ($q) => $q->where('cuil', $cuil)->orWhere('cuil', $rawCuil))
             ->first();
     }
 
@@ -285,7 +304,7 @@ class ProcessPayslipBatch implements ShouldQueue
      */
     protected function persistPayslip(EmployeeProfile $profile, string $absoluteSrcPath, string $originalName): bool
     {
-        // Estampar firma visual del empleador (si está configurada)
+        // Estampar firma visual del empleador (si está configurada).
         $finalContent = $this->stampedPdfContent($absoluteSrcPath);
         $fileHash     = hash('sha256', $finalContent);   // hash del archivo FINAL
         $periodYear   = $this->batch->period_year;
@@ -295,7 +314,13 @@ class ProcessPayslipBatch implements ShouldQueue
         Storage::disk('local')->put($finalPath, $finalContent);
         unset($finalContent); // liberar memoria
 
-        $existing = Payslip::where('employee_id', $profile->user_id)
+        // Defensive fallback: si $this->companyId es 0/null (worker viejo o error de serialización),
+        // usar el company_id del batch como respaldo.
+        $cid = $this->companyId ?: ($this->batch->company_id ?? null);
+
+        $existing = Payslip::withoutGlobalScope(CurrentCompanyScope::class)
+            ->where('employee_id', $profile->user_id)
+            ->where('company_id', $cid)
             ->where('period_year', $this->batch->period_year)
             ->where('period_month', $this->batch->period_month)
             ->where('liquidation_type', $this->batch->liquidation_type)
@@ -304,6 +329,7 @@ class ProcessPayslipBatch implements ShouldQueue
 
         $newPayslip = Payslip::create([
             'employee_id'       => $profile->user_id,
+            'company_id'        => $cid,
             'upload_batch_id'   => $this->batch->id,
             'period_year'       => $this->batch->period_year,
             'period_month'      => $this->batch->period_month,
@@ -343,108 +369,92 @@ class ProcessPayslipBatch implements ShouldQueue
     }
 
     // ───────────────────────────────────────────────────────────────────────────
-    // Firma visual + firma digital del empleador
+    // Firma digital con certificado PFX de la Company
     // ───────────────────────────────────────────────────────────────────────────
 
     /**
-     * Carga UNA SOLA VEZ la configuración de firma del Tenant.
+     * Carga la configuración de firma desde el modelo Company.
      *
-     * La imagen de firma vive en el disco local del tenant (FilesystemTenancyBootstrapper).
-     * Los archivos PEM del certificado digital los guarda el SuperAdmin en el storage
-     * central (storage_path('app/...')), fuera del alcance del tenant bootstrapper.
+     * El campo signature_pfx_path apunta a un archivo PKCS#12 (.pfx/.p12) en el
+     * disco local del tenant. Se usa openssl_pkcs12_read() para extraer el
+     * certificado y la clave privada en memoria, evitando archivos temporales.
      */
-    protected function loadSignatureConfig(): void
+    protected function loadSignatureConfig(Company $company): void
     {
-        $tenant = \App\Models\Tenant::find(tenant('id'));
-        if (!$tenant) {
+        if ($company->signature_x === null) {
             return;
-        }
-
-        $imgRelPath = $tenant->signature_image_path;
-        $sigX       = $tenant->signature_x;
-
-        // Sin firma visual configurada → no hay nada que preparar
-        if (!$imgRelPath || $sigX === null) {
-            return;
-        }
-
-        // La imagen vive en el disco del tenant (bootstrapper ya activo en el job)
-        $imgAbsPath = Storage::disk('local')->path($imgRelPath);
-        if (!file_exists($imgAbsPath)) {
-            Log::warning('ProcessPayslipBatch: imagen de firma no encontrada.', [
-                'path' => $imgAbsPath,
-            ]);
-            return;
-        }
-
-        $ext = strtoupper(pathinfo($imgAbsPath, PATHINFO_EXTENSION));
-        if ($ext === 'JPG') {
-            $ext = 'JPEG'; // TCPDF requiere 'JPEG'
-        }
-
-        // Certificado digital: guardado en storage CENTRAL por el SuperAdmin.
-        // storage_path() en contexto tenant es sobreescrito por Stancl (suffix_storage_path=true).
-        // base_path() NO es sobreescrito → única forma de referenciar el storage central.
-        $certUri = null;
-        $keyUri  = null;
-
-        if ($tenant->cert_path && $tenant->cert_key_path) {
-            $centralBase = base_path(
-                'storage' . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR
-                . 'private' . DIRECTORY_SEPARATOR
-            );
-            $certAbsPath = $centralBase . ltrim(
-                str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $tenant->cert_path),
-                DIRECTORY_SEPARATOR
-            );
-            $keyAbsPath = $centralBase . ltrim(
-                str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $tenant->cert_key_path),
-                DIRECTORY_SEPARATOR
-            );
-
-            if (file_exists($certAbsPath) && file_exists($keyAbsPath)) {
-                $certUri = 'file://' . $certAbsPath;
-                $keyUri  = 'file://' . $keyAbsPath;
-            } else {
-                Log::warning('ProcessPayslipBatch: archivos de certificado digital no encontrados.', [
-                    'cert' => $certAbsPath,
-                    'key'  => $keyAbsPath,
-                ]);
-            }
         }
 
         $this->sigConfig = [
-            'img_abs_path' => $imgAbsPath,
-            'img_ext'      => $ext,
-            'x'            => (float) $tenant->signature_x,
-            'y'            => (float) $tenant->signature_y,
-            'w'            => (float) $tenant->signature_w,
-            'h'            => (float) $tenant->signature_h,
-            'cert_uri'     => $certUri,
-            'key_uri'      => $keyUri,
-            'cert_info'    => [
-                'Name'        => $tenant->company_name ?? '',
+            'cert_pem'    => null,
+            'key_pem'     => null,
+            'x'           => (float) $company->signature_x,
+            'y'           => (float) $company->signature_y,
+            'w'           => (float) $company->signature_w,
+            'h'           => (float) $company->signature_h,
+            // Dimensiones de página de referencia (mm): se usan para escalar
+            // correctamente las coordenadas al tamaño real de cada recibo.
+            // Si son null, se asume A4 portrait (210×297 mm) por compatibilidad.
+            'page_w'      => (float) ($company->signature_page_w ?? 210.0),
+            'page_h'      => (float) ($company->signature_page_h ?? 297.0),
+            // Campo ancla: si está configurado el Job intentará posicionar
+            // la firma dinámicamente. Si falla, usa x/y estáticos como fallback.
+            'anchor_text' => $company->signature_anchor_text,
+            'image_path'  => $company->signature_image_path,
+            'cert_info'   => [
+                'Name'        => $company->name,
                 'Location'    => 'Argentina',
-                'Reason'      => 'Recibo de Sueldo — Firma del Empleador',
-                'ContactInfo' => preg_replace('/\D/', '', $tenant->employer_cuit ?? ''),
+                'Reason'      => 'Emisión de recibo de haberes original',
+                'ContactInfo' => preg_replace('/\D/', '', $company->cuit ?? ''),
             ],
         ];
+
+        if ($company->signature_pfx_path) {
+            $pfxAbsPath = Storage::disk('local')->path($company->signature_pfx_path);
+
+            if (!file_exists($pfxAbsPath)) {
+                Log::warning('ProcessPayslipBatch: PFX de firma no encontrado.', [
+                    'company_id' => $company->id,
+                    'path'       => $pfxAbsPath,
+                ]);
+            } else {
+                $pfxContent = file_get_contents($pfxAbsPath);
+                $certs      = [];
+
+                $password = $company->signature_pfx_password ?? '';
+                if (!empty($password)) {
+                    try {
+                        $password = decrypt($password);
+                    } catch (\Illuminate\Contracts\Encryption\DecryptException $e) {
+                        // Fallback a texto plano si no está encriptada
+                    }
+                }
+
+                if (!openssl_pkcs12_read($pfxContent, $certs, $password)) {
+                    Log::warning('ProcessPayslipBatch: no se pudo parsear el PFX (contraseña incorrecta o archivo inválido).', [
+                        'company_id' => $company->id,
+                    ]);
+                } else {
+                    $this->sigConfig['cert_pem'] = $certs['cert'];
+                    $this->sigConfig['key_pem']  = $certs['pkey'];
+                }
+            }
+        }
     }
 
     /**
      * Retorna el contenido del PDF con:
-     *  - Imagen de firma visual del empleador (en coordenadas mm A4 configuradas).
-     *  - Firma digital criptográfica X.509 del Tenant (PKCS#7, modo incremental).
+     *  - Firma criptográfica X.509 extraída del PFX de la Company (PKCS#7).
+     *  - Widget de firma visible en las coordenadas configuradas en la Company.
      *
      * cert_type=2: permite que el empleado agregue su propia firma electrónica
      * posteriormente sin invalidar el sello del empleador.
      *
-     * Si la firma no está configurada, o si FPDI no soporta el PDF (compressed
+     * Si la firma no está configurada o FPDI no soporta el PDF (compressed
      * streams / PDF 1.5+), retorna el PDF original sin modificaciones.
      */
     protected function stampedPdfContent(string $srcPath): string
     {
-        // Sin configuración pre-cargada → devolver el PDF original
         if (!$this->sigConfig) {
             return file_get_contents($srcPath);
         }
@@ -452,9 +462,8 @@ class ProcessPayslipBatch implements ShouldQueue
         $cfg = $this->sigConfig;
 
         try {
-            $fpdi = new Fpdi();
-            $fpdi->setPrintHeader(false);
-            $fpdi->setPrintFooter(false);
+            $fpdi = new CustomFpdi();
+            $fpdi->SetAutoPageBreak(false);
             $fpdi->setSourceFile($srcPath);
 
             $templateId = $fpdi->importPage(1);
@@ -466,34 +475,115 @@ class ProcessPayslipBatch implements ShouldQueue
             );
             $fpdi->useTemplate($templateId);
 
-            // ── Firma visual: imagen del empleador ──────────────────────────
-            // Escalar coordenadas A4 (210×297mm) al tamaño real de la página
-            $scaleX = $size['width']  / 210.0;
-            $scaleY = $size['height'] / 297.0;
+            // ── Escalar coordenadas al tamaño real de la página ────────────────
+            // Usa las dimensiones de referencia con las que se configuró la
+            // firma (detección automática al subir el PDF de muestra).
+            $refW = $cfg['page_w'] ?: 210.0;
+            $refH = $cfg['page_h'] ?: 297.0;
+            $scaleX = $size['width']  / $refW;
+            $scaleY = $size['height'] / $refH;
 
-            $fpdi->Image(
-                $cfg['img_abs_path'],
-                $cfg['x'] * $scaleX,
-                $cfg['y'] * $scaleY,
-                $cfg['w'] * $scaleX,
-                $cfg['h'] * $scaleY,
-                $cfg['img_ext']
-            );
+            // ── Coordenadas base (estáticas configuradas en la Company) ──────────
+            // Según requerimiento, asumimos que ya vienen en milímetros desde la BD
+            // y no deben invertirse ni convertirse de nuevo.
+            $sigX = $cfg['x'];
+            $sigY = $cfg['y'];
+            $sigW = $cfg['w'];
+            $sigH = $cfg['h'];
+
+            $methodUsed = 'Fallback';
+
+            // ── Anclaje dinámico: override de X/Y si se encontró el texto ancla ──
+            //
+            // Se busca en $srcPath (PDF individual de una sola página: ya sea el archivo
+            // extraído por extractSinglePage o el PDF individual del ZIP). Esto garantiza
+            // que las coordenadas Tm de smalot sean consistentes con el CTM que FPDI aplicó
+            // al importar la página con useTemplate().
+            //
+            // PdfCoordinateExtractor devuelve Y desde borde INFERIOR en mm.
+            // La fórmula solicitada es: Y_tcpdf = (PageHeight - Y_parser_text) - AltoDeLaFirma
+
+            if (!empty($cfg['anchor_text'])) {
+                try {
+                    $anchored = app(PdfCoordinateExtractor::class)
+                        ->findCoordinates($srcPath, $cfg['anchor_text']);
+
+                    if ($anchored !== null) {
+                        $methodUsed = 'TextAnchor';
+                        
+                        $pageHeightMm   = $size['height'];
+                        
+                        // Mantenemos el X estático configurado en la BD.
+                        // El ancla solo se usa para calcular la "coordenada Y exacta" según el largo,
+                        // evitando el bug donde el parser reporta X=1.0 si el ancla es parte de un bloque largo.
+                        $sigY = $pageHeightMm - $anchored['y_mm_from_bottom'] - $sigH - ($anchored['font_size_mm'] * 25);
+
+                        Log::debug('ProcessPayslipBatch: firma posicionada por ancla de texto.', [
+                            'archivo' => basename($srcPath),
+                            'anchor'  => $cfg['anchor_text'],
+                            'x_mm'    => round($sigX, 2),
+                            'y_mm'    => round($sigY, 2),
+                        ]);
+                    } else {
+                        Log::warning('ProcessPayslipBatch: el texto ancla no se encontro en la pagina.', [
+                            'archivo' => basename($srcPath),
+                            'anchor'  => $cfg['anchor_text'],
+                        ]);
+                    }
+                } catch (\Throwable $anchorEx) {
+                    // Capturar Throwable (no sólo Exception): smalot/pdfparser puede lanzar
+                    // Error/TypeError en PDFs con fuentes o encoding no soportados.
+                    // $sigX/$sigY conservan las coordenadas estáticas como fallback.
+                    Log::warning('ProcessPayslipBatch: ancla de texto falló; usando coordenadas estáticas.', [
+                        'archivo' => basename($srcPath),
+                        'anchor'  => $cfg['anchor_text'],
+                        'error'   => $anchorEx->getMessage(),
+                        'clase'   => get_class($anchorEx),
+                    ]);
+                }
+            }
+
+            // ── Telemetría y Logging (Crucial para el debug) ──────────────────────
+            Log::channel('single')->debug('ProcessPayslipBatch: Coordenadas Inyectadas', [
+                'pageNo'      => 1, // srcPath es de una única página
+                'orientation' => $size['orientation'] ?? 'P',
+                'width_mm'    => round($size['width'], 2),
+                'height_mm'   => round($size['height'], 2),
+                'method'      => $methodUsed,
+                'anchor_text' => $cfg['anchor_text'],
+                'final_x_mm'  => round($sigX, 2),
+                'final_y_mm'  => round($sigY, 2),
+                'final_w_mm'  => round($sigW, 2),
+                'final_h_mm'  => round($sigH, 2),
+            ]);
 
             // ── Firma criptográfica digital (X.509, PKCS#7 detached) ────────────
-            // setSignature() debe llamarse ANTES de Output().
-            // Sin setSignatureAppearance() el widget queda embebido sin campo
-            // visual en la página (el sello ya está como imagen estampada).
-            // cert_type=2: fill+sign permitidos → el empleado puede firmar después.
-            if ($cfg['cert_uri'] && $cfg['key_uri']) {
+            // Usa cert y key en formato PEM extraídos en memoria del PFX.
+            // cert_type=2: fill+sign — el empleado puede firmar después.
+            if (!empty($cfg['cert_pem']) && !empty($cfg['key_pem'])) {
                 $fpdi->setSignature(
-                    $cfg['cert_uri'],  // 'file:///ruta/al/certificado.crt'
-                    $cfg['key_uri'],   // 'file:///ruta/a/la/clave.key'
-                    '',                // sin contraseña (clave generada sin cifrar)
-                    '',                // sin cadena de certificados adicional
-                    2,                 // MDP cert_type=2: fill+sign permitidos
-                    $cfg['cert_info']  // metadatos institucionales del firmante
+                    $cfg['cert_pem'],
+                    $cfg['key_pem'],
+                    '',   // sin contraseña: la clave ya fue extraída del PFX
+                    '',   // sin cadena de certificados adicional
+                    2,
+                    $cfg['cert_info']
                 );
+            }
+
+            // ── Widget de firma visible en coordenadas resueltas ─────────────────
+            // $sigX/$sigY ya incorporan el override del texto ancla (si aplica).
+            // En caso de fallo del extractor, contienen las coords estáticas.
+            $fpdi->setSignatureAppearance($sigX, $sigY, $sigW, $sigH);
+
+            // ── Inyectar imagen visual de la firma (PNG/JPG) ─────────────────────
+            // Para que la firma sea visible en navegadores (Chrome, Edge, móviles)
+            if (!empty($cfg['image_path'])) {
+                $imageAbsPath = Storage::disk('local')->path($cfg['image_path']);
+                if (file_exists($imageAbsPath)) {
+                    // TCPDF Image() dibuja directamente sobre el lienzo actual
+                    $fpdi->Image($imageAbsPath, $sigX, $sigY, $sigW, $sigH);
+                }
             }
 
             $content = $fpdi->Output('', 'S');

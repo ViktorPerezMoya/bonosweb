@@ -108,6 +108,16 @@
                 </div>
             </div>
 
+            <div class="flex items-start gap-2 mt-3 pt-3 border-t border-white/10">
+                <div class="flex items-center h-5">
+                    <input wire:model.live="hideNameInMenu" id="hideNameInMenu" type="checkbox" class="w-4 h-4 text-accent bg-transparent border-gray-600 rounded focus:ring-accent focus:ring-2">
+                </div>
+                <label for="hideNameInMenu" class="text-xs text-gray-300">
+                    Ocultar nombre de la empresa en el menú <br>
+                    <span class="text-[10px] text-gray-500">(Recomendado para logos anchos o tipográficos)</span>
+                </label>
+            </div>
+
             <p class="text-xs" style="color: var(--text-muted);">
                 <i class="ri-information-line mr-1"></i>
                 Recomendado: fondo transparente, ratio aproximado 3:1.

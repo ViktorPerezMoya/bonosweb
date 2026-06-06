@@ -2,7 +2,10 @@
 
 namespace App\Livewire\Tenant;
 
+use App\Models\Company;
+use App\Services\CompanyContextService;
 use Illuminate\Support\Facades\Storage;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
@@ -14,43 +17,86 @@ class BrandingSettings extends Component
     public $logo;
     public $loginBackground;
 
-    // ── URLs actuales (ya guardadas) ──────────────────────────────────────────
+    // ── URLs y configuraciones actuales ───────────────────────────────────────
     public ?string $currentLogoUrl = null;
     public ?string $currentBgUrl   = null;
+    public bool $hideNameInMenu    = false;
 
     // ── Reglas de validación ──────────────────────────────────────────────────
     protected function rules(): array
     {
         return [
-            'logo'            => 'nullable|file|mimes:png,svg|max:1024',
+            'logo'            => 'nullable|file|mimes:png,svg,jpg,jpeg|max:2048',
             'loginBackground' => 'nullable|file|mimes:jpeg,jpg,webp|max:3072',
+            'hideNameInMenu'  => 'boolean',
         ];
     }
 
-    public function mount(): void
+    public function mount(CompanyContextService $contextService): void
     {
+        abort_if(auth()->user()->role !== 'admin', 403);
+
         $t = tenant();
-        $this->currentLogoUrl = $t->logoUrl();
-        $this->currentBgUrl   = $t->loginBackgroundUrl();
+        $this->currentBgUrl = $t->loginBackgroundUrl();
+        
+        $company = Company::find($contextService->getCurrentCompanyId());
+        $this->currentLogoUrl = ($company && $company->logo_path) ? route('branding.logo', $company->id) : null;
+        $this->hideNameInMenu = $company->hide_name_in_menu ?? false;
+    }
+
+    #[On('company-changed')]
+    public function reloadLogo(): void
+    {
+        $contextService = app(CompanyContextService::class);
+        $company = Company::find($contextService->getCurrentCompanyId());
+        $this->currentLogoUrl = ($company && $company->logo_path) ? route('branding.logo', $company->id) : null;
+        $this->hideNameInMenu = $company->hide_name_in_menu ?? false;
+    }
+
+    public function updatedHideNameInMenu()
+    {
+        $contextService = app(CompanyContextService::class);
+        $company = Company::findOrFail($contextService->getCurrentCompanyId());
+        $company->update(['hide_name_in_menu' => $this->hideNameInMenu]);
+        session()->flash('logo_saved', 'Configuración del menú actualizada.');
     }
 
     // ── Guardar logo ──────────────────────────────────────────────────────────
-    public function saveLogo(): void
+    public function saveLogo(CompanyContextService $contextService): void
     {
-        $this->validateOnly('logo', ['logo' => 'required|file|mimes:png,svg|max:1024']);
+        $this->validateOnly('logo', ['logo' => 'required|file|mimes:png,svg,jpg,jpeg|max:2048']);
 
-        $t = tenant();
+        $company = Company::findOrFail($contextService->getCurrentCompanyId());
 
-        if ($t->logo_path && Storage::disk('public')->exists($t->logo_path)) {
-            Storage::disk('public')->delete($t->logo_path);
+        if ($company->logo_path && Storage::disk('public')->exists($company->logo_path)) {
+            Storage::disk('public')->delete($company->logo_path);
         }
 
         $ext  = $this->logo->getClientOriginalExtension();
-        $path = $this->logo->storeAs('branding', "logo.{$ext}", 'public');
+        // Generar nombre unico para que no hayan conflictos entre empresas
+        $filename = "logo_company_{$company->id}_" . time() . ".{$ext}";
+        $path = $this->logo->storeAs('branding', $filename, 'public');
 
-        $t->update(['logo_path' => $path]);
+        // Automatically set hide_name_in_menu if aspect ratio > 2
+        try {
+            $absPath = Storage::disk('public')->path($path);
+            $size = getimagesize($absPath);
+            if ($size && $size[1] > 0) {
+                $aspectRatio = $size[0] / $size[1];
+                if ($aspectRatio > 2.0) {
+                    $this->hideNameInMenu = true;
+                }
+            }
+        } catch (\Throwable $th) {
+            // Ignorar errores de getimagesize
+        }
 
-        $this->currentLogoUrl = route('branding.logo');
+        $company->update([
+            'logo_path' => $path,
+            'hide_name_in_menu' => $this->hideNameInMenu,
+        ]);
+
+        $this->currentLogoUrl = route('branding.logo', $company->id);
         $this->logo           = null;
 
         session()->flash('logo_saved', 'Logo actualizado correctamente.');
@@ -68,7 +114,9 @@ class BrandingSettings extends Component
         }
 
         $ext  = $this->loginBackground->getClientOriginalExtension();
-        $path = $this->loginBackground->storeAs('branding', "background.{$ext}", 'local');
+        // Generar nombre unico para evitar cacheo no deseado
+        $filename = "background_" . time() . ".{$ext}";
+        $path = $this->loginBackground->storeAs('branding', $filename, 'public');
 
         $t->update(['login_background_path' => $path]);
 
@@ -79,15 +127,15 @@ class BrandingSettings extends Component
     }
 
     // ── Eliminar logo ─────────────────────────────────────────────────────────
-    public function removeLogo(): void
+    public function removeLogo(CompanyContextService $contextService): void
     {
-        $t = tenant();
+        $company = Company::findOrFail($contextService->getCurrentCompanyId());
 
-        if ($t->logo_path && Storage::disk('public')->exists($t->logo_path)) {
-            Storage::disk('public')->delete($t->logo_path);
+        if ($company->logo_path && Storage::disk('public')->exists($company->logo_path)) {
+            Storage::disk('public')->delete($company->logo_path);
         }
 
-        $t->update(['logo_path' => null]);
+        $company->update(['logo_path' => null]);
         $this->currentLogoUrl = null;
 
         session()->flash('logo_saved', 'Logo eliminado.');

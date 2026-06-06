@@ -9,8 +9,11 @@
         @endif
 
         <div class="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
-            <div class="order-first sm:order-last">
-                <button wire:click="openModal" class="btn btn-primary w-full sm:w-auto">
+            <div class="flex flex-col gap-2 sm:flex-row sm:gap-3 order-first sm:order-last">
+                <button wire:click="openImportModal" class="btn" style="background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); color: var(--text-primary); width: 100%; justify-content: center;">
+                    <i class="ri-user-received-line" style="margin-right: 5px;"></i> Importar de otra Empresa
+                </button>
+                <button wire:click="openModal" class="btn btn-primary w-full sm:w-auto" style="justify-content: center;">
                     <i class="ri-user-add-line" style="margin-right: 5px;"></i> Nuevo Empleado
                 </button>
             </div>
@@ -37,10 +40,10 @@
                             <div style="font-weight: 500; color: var(--text-primary);">{{ $employee->name }}</div>
                             <div style="font-size: 0.8rem; color: var(--text-secondary);">{{ $employee->email }}</div>
                         </td>
-                        <td>{{ $employee->employeeProfile->cuil ?? 'No asignado' }}</td>
-                        <td>{{ $employee->employeeProfile->department ?? '-' }}</td>
+                        <td>{{ $employee->currentCompanyProfile->cuil ?? 'No asignado' }}</td>
+                        <td>{{ $employee->currentCompanyProfile->department ?? '-' }}</td>
                         <td>
-                            @if(optional($employee->employeeProfile)->is_active)
+                            @if(optional($employee->currentCompanyProfile)->is_active)
                                 <span class="badge badge-success">Activo</span>
                             @else
                                 <span class="badge badge-error">Suspendido</span>
@@ -57,7 +60,7 @@
                                 <button wire:click="resetPassword({{ $employee->id }})" class="btn" style="background: rgba(245, 158, 11, 0.2); color: var(--warning); padding: 0.4rem 0.6rem;" title="Resetear Clave" onclick="confirm('¿Estás seguro de generar una nueva contraseña temporal?') || event.stopImmediatePropagation()">
                                     <i class="ri-key-2-line"></i>
                                 </button>
-                                <button wire:click="toggleActive({{ $employee->id }})" class="btn" style="background: {{ optional($employee->employeeProfile)->is_active ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)' }}; color: {{ optional($employee->employeeProfile)->is_active ? 'var(--danger)' : 'var(--success)' }}; padding: 0.4rem 0.6rem;" title="{{ optional($employee->employeeProfile)->is_active ? 'Suspender' : 'Activar' }}">
+                                <button wire:click="toggleActive({{ $employee->id }})" class="btn" style="background: {{ optional($employee->currentCompanyProfile)->is_active ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)' }}; color: {{ optional($employee->currentCompanyProfile)->is_active ? 'var(--danger)' : 'var(--success)' }}; padding: 0.4rem 0.6rem;" title="{{ optional($employee->currentCompanyProfile)->is_active ? 'Suspender' : 'Activar' }}">
                                     <i class="ri-shut-down-line"></i>
                                 </button>
                             </div>
@@ -145,6 +148,59 @@
                     <button type="submit" class="btn btn-primary">Guardar Datos</button>
                 </div>
             </form>
+        </div>
+    </div>
+    @endif
+
+    <!-- Import Modal -->
+    @if($showImportModal)
+    <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px); z-index: 100; display: flex; align-items: center; justify-content: center;">
+        <div class="glass-panel" style="width: 100%; max-width: 600px; padding: 2rem; background: var(--bg-secondary); overflow: hidden; display: flex; flex-direction: column; max-height: 90vh;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h3 style="margin: 0;"><i class="ri-search-line" style="margin-right: 5px;"></i> Importar Empleado</h3>
+                <button wire:click="closeImportModal" style="background: none; border: none; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer;">&times;</button>
+            </div>
+            
+            <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                Busca un empleado existente en tu corporación por nombre, email, CUIL o DNI para asignarlo también a esta empresa.
+            </p>
+
+            <div class="form-group">
+                <input type="text" wire:model.live.debounce.300ms="searchImport" class="form-control" placeholder="Escribe al menos 3 caracteres...">
+            </div>
+
+            <div style="flex: 1; overflow-y: auto; margin-top: 1rem; border: 1px solid var(--glass-border); border-radius: var(--radius-md); background: rgba(0,0,0,0.2);">
+                @if(strlen($searchImport) >= 3)
+                    @if(count($importCandidates) > 0)
+                        <ul style="list-style: none; padding: 0; margin: 0;">
+                            @foreach($importCandidates as $candidate)
+                                @php
+                                    $prof = $candidate->employeeProfiles->first();
+                                @endphp
+                                <li style="padding: 1rem; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <div style="font-weight: bold; color: var(--text-primary);">{{ $candidate->name }}</div>
+                                        <div style="font-size: 0.8rem; color: var(--text-secondary);">
+                                            {{ $candidate->email }} | CUIL: {{ $prof ? $prof->cuil : 'N/A' }}
+                                        </div>
+                                    </div>
+                                    <button wire:click="importUser({{ $candidate->id }})" class="btn btn-primary" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;" wire:loading.attr="disabled" wire:target="importUser">
+                                        Importar
+                                    </button>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @else
+                        <div style="padding: 2rem; text-align: center; color: var(--text-secondary);">
+                            No se encontraron empleados no vinculados con esos datos.
+                        </div>
+                    @endif
+                @else
+                    <div style="padding: 2rem; text-align: center; color: var(--text-secondary);">
+                        Escribe para comenzar a buscar...
+                    </div>
+                @endif
+            </div>
         </div>
     </div>
     @endif

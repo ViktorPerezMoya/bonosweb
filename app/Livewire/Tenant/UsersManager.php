@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Tenant;
 
+use App\Models\Scopes\CurrentCompanyScope;
 use Livewire\Component;
 use Livewire\WithPagination;
 use App\Models\User;
@@ -12,7 +13,7 @@ class UsersManager extends Component
     use WithPagination;
 
     public $showModal = false;
-    
+
     // User Form
     public $userId = null;
     public $name = '';
@@ -109,7 +110,11 @@ class UsersManager extends Component
     public function render()
     {
         return view('livewire.tenant.users-manager', [
-            'users' => User::whereIn('role', ['admin', 'hr'])->paginate(10)
+            // withoutGlobalScope garantiza que se listen TODOS los usuarios de
+            // gestión del tenant, sin importar qué empresa esté activa en sesión.
+            'users' => User::withoutGlobalScope(CurrentCompanyScope::class)
+                           ->whereIn('role', ['admin', 'hr'])
+                           ->paginate(10)
         ])->layout('components.layouts.app', [
             'header' => 'Gestión de Personal Administrativo',
             'title' => 'Usuarios - RRHH'

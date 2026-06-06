@@ -16,6 +16,11 @@ class TenantBilling extends Component
     public float $paymentAmount   = 0;
     public $receipt                = null;
 
+    public function mount(): void
+    {
+        abort_if(auth()->user()->role !== 'admin', 403);
+    }
+
     public function openPaymentModal(): void
     {
         $this->paymentAmount = 0;

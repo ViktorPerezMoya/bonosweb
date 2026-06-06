@@ -1,43 +1,62 @@
 <div>
 
-    {{-- ── KPI Cards ── --}}
-    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2rem; margin-bottom: 2rem;">
-        <div class="glass-panel" style="padding: 1.4rem;">
-            <h3 style="color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">
-                <i class="ri-money-dollar-circle-line"></i> Deuda Total
-            </h3>
-            <div style="font-size: 1.8rem; font-weight: 700; color: var(--warning);">
-                $ {{ number_format($stats['total_balance'], 2, ',', '.') }}
+    {{-- ── KPI Cards: carrusel en móvil / grid en desktop ── --}}
+    <div x-data="{ dot: 0 }" class="mb-8">
+        <div
+            x-ref="kpis"
+            @scroll.debounce.100ms="dot = Math.round($el.scrollLeft / ($el.scrollWidth / 4))"
+            class="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-3
+                   md:grid md:grid-cols-4 md:overflow-visible md:snap-none"
+            style="scrollbar-width: none; -ms-overflow-style: none;"
+        >
+            <div class="glass-panel shrink-0 w-[80vw] snap-start md:w-auto" style="padding: 1.4rem;">
+                <h3 style="color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">
+                    <i class="ri-money-dollar-circle-line"></i> Deuda Total
+                </h3>
+                <div style="font-size: 1.8rem; font-weight: 700; color: var(--warning);">
+                    $ {{ number_format($stats['total_balance'], 2, ',', '.') }}
+                </div>
+            </div>
+            <div class="glass-panel shrink-0 w-[80vw] snap-start md:w-auto" style="padding: 1.4rem;">
+                <h3 style="color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">
+                    <i class="ri-time-line"></i> Facturas Pendientes
+                </h3>
+                <div style="font-size: 1.8rem; font-weight: 700; color: {{ $stats['pending_invoices'] > 0 ? '#fbbf24' : 'white' }};">
+                    {{ $stats['pending_invoices'] }}
+                </div>
+            </div>
+            <div class="glass-panel shrink-0 w-[80vw] snap-start md:w-auto" style="padding: 1.4rem;">
+                <h3 style="color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">
+                    <i class="ri-error-warning-line"></i> Facturas Vencidas
+                </h3>
+                <div style="font-size: 1.8rem; font-weight: 700; color: var(--danger);">
+                    {{ $stats['overdue_invoices'] }}
+                </div>
+            </div>
+            <div class="glass-panel shrink-0 w-[80vw] snap-start md:w-auto" style="padding: 1.4rem;">
+                <h3 style="color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">
+                    <i class="ri-forbid-line"></i> Suspendidas
+                </h3>
+                <div style="font-size: 1.8rem; font-weight: 700; color: var(--danger);">
+                    {{ $stats['suspended'] }}
+                </div>
             </div>
         </div>
-        <div class="glass-panel" style="padding: 1.4rem;">
-            <h3 style="color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">
-                <i class="ri-time-line"></i> Facturas Pendientes
-            </h3>
-            <div style="font-size: 1.8rem; font-weight: 700; color: {{ $stats['pending_invoices'] > 0 ? '#fbbf24' : 'white' }};">
-                {{ $stats['pending_invoices'] }}
-            </div>
-        </div>
-        <div class="glass-panel" style="padding: 1.4rem;">
-            <h3 style="color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">
-                <i class="ri-error-warning-line"></i> Facturas Vencidas
-            </h3>
-            <div style="font-size: 1.8rem; font-weight: 700; color: var(--danger);">
-                {{ $stats['overdue_invoices'] }}
-            </div>
-        </div>
-        <div class="glass-panel" style="padding: 1.4rem;">
-            <h3 style="color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">
-                <i class="ri-forbid-line"></i> Suspendidas
-            </h3>
-            <div style="font-size: 1.8rem; font-weight: 700; color: var(--danger);">
-                {{ $stats['suspended'] }}
-            </div>
+        {{-- Dots: solo visibles en móvil --}}
+        <div class="flex justify-center gap-2 mt-2 md:hidden">
+            <template x-for="i in 4" :key="i">
+                <button
+                    type="button"
+                    @click="$refs.kpis.children[i-1].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' }); dot = i-1"
+                    :class="dot === i-1 ? 'w-5 bg-violet-500' : 'w-2 bg-white/30'"
+                    class="h-2 rounded-full transition-all duration-200">
+                </button>
+            </template>
         </div>
     </div>
 
     {{-- ── Fila: Configuración Global + Pagos Pendientes ── --}}
-    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1.5rem; margin-bottom: 2rem;">
+    <div class="grid grid-cols-1 gap-4 mb-8 md:grid-cols-[1fr_2fr]">
 
         {{-- Config global --}}
         <div class="glass-panel" style="padding: 1.5rem;">

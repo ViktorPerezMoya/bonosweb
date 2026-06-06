@@ -4,11 +4,11 @@ namespace App\Livewire\Payslips;
 
 use Livewire\Component;
 use Livewire\WithFileUploads;
+use App\Jobs\ProcessPayslipBatch;
 use App\Models\UploadBatch;
+use App\Services\CompanyContextService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
-
-use App\Jobs\ProcessPayslipBatch;
 
 class Upload extends Component
 {
@@ -55,9 +55,13 @@ class Upload extends Component
             $fileType  = $extension === 'pdf' ? 'pdf' : 'zip';
             $path = $this->zipFile->store('batches/temp', 'local');
 
+            // Empresa activa en la sesión del usuario de RRHH
+            $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
+
             // 2. Crear el registro del Batch en la Base de Datos
             $batch = UploadBatch::create([
                 'uploader_id'       => Auth::id(),
+                'company_id'        => $companyId,
                 'original_filename' => $this->zipFile->getClientOriginalName(),
                 'file_type'         => $fileType,
                 'period_year'       => $this->period_year,
@@ -70,9 +74,9 @@ class Upload extends Component
                 'processed_files'   => 0,
             ]);
 
-            // 3. Despachar el Job. La configuración de firma (visual + digital)
-            //    se carga automáticamente dentro del Job desde los datos ya guardados.
-            ProcessPayslipBatch::dispatch($batch, $path);
+            // 3. Despachar el Job con el ID de empresa explícito para que el
+            //    proceso asíncrono (sin sesión HTTP) use el certificado correcto.
+            ProcessPayslipBatch::dispatch($batch, $path, $companyId);
 
             $this->uploadSuccess = true;
             $this->reset('zipFile');

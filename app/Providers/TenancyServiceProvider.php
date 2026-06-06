@@ -28,11 +28,11 @@ class TenancyServiceProvider extends ServiceProvider
                     Jobs\CreateDatabase::class,
                     Jobs\MigrateDatabase::class,
                     \App\Jobs\Tenancy\CreateTenantAdminUser::class,
+                    // Crea la Company principal (is_main=true) y vincula el admin.
+                    // Debe ir DESPUÉS de MigrateDatabase (necesita tabla companies)
+                    // y DESPUÉS de CreateTenantAdminUser (necesita el User creado).
+                    \App\Jobs\Tenancy\ProvisionNewTenantData::class,
                     // Jobs\SeedDatabase::class,
-
-                    // Your own jobs to prepare the tenant.
-                    // Provision API keys, create S3 buckets, anything you want!
-
                 ])->send(function (Events\TenantCreated $event) {
                     return $event->tenant;
                 })->shouldBeQueued(false), // `false` by default, but you probably want to make this `true` for production.

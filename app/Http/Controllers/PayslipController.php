@@ -32,7 +32,7 @@ class PayslipController extends Controller
 
     public function exportHistory($id)
     {
-        $employee = User::with('employeeProfile')->findOrFail($id);
+        $employee = User::with('currentCompanyProfile')->findOrFail($id);
         $payslips = Payslip::with(['uploadBatch', 'signature'])
             ->where('employee_id', $employee->id)
             ->where('is_rectified', false)
@@ -40,7 +40,8 @@ class PayslipController extends Controller
             ->orderBy('period_month', 'desc')
             ->get();
 
-        $companyName = tenant('company_name') ?? 'BonosWeb System';
+        $companyId = app(\App\Services\CompanyContextService::class)->getCurrentCompanyId();
+        $companyName = \App\Models\Company::find($companyId)->name ?? 'BonosWeb System';
 
         // ── 1. Inicializar TCPDF ──────────────────────────────────────────
         $pdf = new TCPDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
@@ -103,7 +104,7 @@ class PayslipController extends Controller
 
         $pdf->SetFont('helvetica', '', 12);
         $pdf->Cell(0, 10, 'Empleado: ' . $employee->name, 0, 1, 'L');
-        $pdf->Cell(0, 10, 'CUIL: ' . ($employee->employeeProfile->cuil ?? 'N/A'), 0, 1, 'L');
+        $pdf->Cell(0, 10, 'CUIL: ' . ($employee->currentCompanyProfile->cuil ?? 'N/A'), 0, 1, 'L');
         $pdf->Cell(0, 10, 'Fecha de Emisión: ' . date('d/m/Y H:i:s'), 0, 1, 'L');
 
         $pdf->Ln(10);
@@ -146,6 +147,6 @@ class PayslipController extends Controller
         $pdf->MultiCell(0, 10, "Este documento ha sido generado automáticamente por el sistema BonosWeb para la empresa {$companyName}. Posee un sello criptográfico (Firma Electrónica) emitido a nombre de {$companyName} que garantiza que su contenido no ha sido alterado tras su emisión.", 0, 'C');
 
         // ── 4. Output ─────────────────────────────────────────────────────
-        $pdf->Output('Auditoria_' . ($employee->employeeProfile->cuil ?? $id) . '.pdf', 'I');
+        $pdf->Output('Auditoria_' . ($employee->currentCompanyProfile->cuil ?? $id) . '.pdf', 'I');
     }
 }

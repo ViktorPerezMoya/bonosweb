@@ -12,6 +12,11 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->group('universal', []);
+
+        // Alias para proteger rutas exclusivas de administradores tenant.
+        $middleware->alias([
+            'tenant.admin' => \App\Http\Middleware\EnsureTenantAdmin::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Cuando la sesión del SuperAdmin expira, redirigir al login correcto

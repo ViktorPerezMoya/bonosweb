@@ -4,9 +4,13 @@
     <div class="glass-panel {{ $bgUrl ? 'backdrop-blur-sm' : '' }} mx-4"
          style="width: 100%; max-width: 400px; padding: 2.5rem;">
         <div style="text-align: center; margin-bottom: 2rem;">
-            <i class="ri-wallet-3-line" style="font-size: 3rem; color: var(--accent);"></i>
-            <h2 style="margin-top: 1rem;">Acceso RRHH</h2>
-            <p>Sistema de Gestión de Bonos</p>
+            @if(isset($mainCompanyLogoUrl) && $mainCompanyLogoUrl)
+                <img src="{{ $mainCompanyLogoUrl }}" alt="Logo Empresa" style="max-height: 80px; margin: 0 auto;">
+            @else
+                <i class="ri-wallet-3-line" style="font-size: 3rem; color: var(--accent);"></i>
+                <h2 style="margin-top: 1rem;">BonosWeb</h2>
+            @endif
+            <p style="margin-top: 1rem;">Ingresá con tu email (RRHH) o DNI/CUIL (empleado)</p>
         </div>
 
         @if (session()->has('message'))
@@ -17,9 +21,16 @@
 
         <form wire:submit.prevent="login">
             <div class="form-group">
-                <label for="email" class="form-label">Correo Electrónico</label>
-                <input type="email" id="email" wire:model="email" class="form-control" placeholder="rrhh@empresa.com" required>
-                @error('email') <span style="color: var(--danger); font-size: 0.8rem; margin-top: 5px;">{{ $message }}</span> @enderror
+                <label for="credential" class="form-label">Email, DNI o CUIL</label>
+                <input type="text"
+                       id="credential"
+                       wire:model="credential"
+                       class="form-control"
+                       placeholder="email@empresa.com  /  12345678  /  20123456789"
+                       autocomplete="username"
+                       autocapitalize="none"
+                       required>
+                @error('credential') <span style="color: var(--danger); font-size: 0.8rem; margin-top: 5px;">{{ $message }}</span> @enderror
             </div>
 
             <div class="form-group">

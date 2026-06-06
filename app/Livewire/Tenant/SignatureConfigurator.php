@@ -2,10 +2,13 @@
 
 namespace App\Livewire\Tenant;
 
+use App\Models\Company;
 use App\Models\Tenant;
+use App\Services\CompanyContextService;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
 use Livewire\WithFileUploads;
+use setasign\Fpdi\Tcpdf\Fpdi;
 
 class SignatureConfigurator extends Component
 {
@@ -21,13 +24,25 @@ class SignatureConfigurator extends Component
     public bool   $coordinatesSaved   = false;
     public string $uploadError        = '';
 
-    // ── Coordenadas guardadas (mm, A4) ────────────────────────────────────────
-    public float|null $sigXmm = null;
-    public float|null $sigYmm = null;
-    public float      $sigWmm = 50.0;
-    public float      $sigHmm = 20.0;
+    // ── Coordenadas guardadas (mm, página real) ───────────────────────────────
+    // Siempre son floats; 0.0 = esquina superior-izquierda (nuevo tenant).
+    public float $sigXmm = 0.0;
+    public float $sigYmm = 0.0;
+    public float $sigWmm = 40.0;
+    public float $sigHmm = 20.0;
 
-    // ── Dimensiones A4 en mm ──────────────────────────────────────────────────
+    // ── Indica si el tenant ya ha arrastrado y guardado coordenadas ───────────
+    public bool $sigConfigured = false;
+
+    // ── Texto ancla para posicionamiento dinámico ─────────────────────────────
+    public string $anchorText = '';
+
+    // ── Dimensiones reales de la página (mm) ─────────────────────────────────
+    // Detectadas al subir el PDF de muestra; defecto A4 portrait.
+    public float $pageWmm = 210.0;
+    public float $pageHmm = 297.0;
+
+    // ── Dimensiones A4 en mm (constantes de fallback) ─────────────────────────
     const PAGE_W_MM = 210.0;
     const PAGE_H_MM = 297.0;
 
@@ -44,18 +59,32 @@ class SignatureConfigurator extends Component
 
     public function mount(): void
     {
-        $t = tenant();
+        abort_if(auth()->user()->role !== 'admin', 403);
 
-        $this->sigXmm = $t->signature_x !== null ? (float) $t->signature_x : null;
-        $this->sigYmm = $t->signature_y !== null ? (float) $t->signature_y : null;
-        $this->sigWmm = $t->signature_w !== null ? (float) $t->signature_w : 50.0;
-        $this->sigHmm = $t->signature_h !== null ? (float) $t->signature_h : 20.0;
+        $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
+        $company = Company::find($companyId);
 
-        $this->previewAvailable = !empty($t->signature_preview_path)
-            && Storage::disk('local')->exists($t->signature_preview_path);
+        if (!$company) {
+            abort(404, 'Empresa activa no encontrada');
+        }
 
-        $this->signatureAvailable = !empty($t->signature_image_path)
-            && Storage::disk('local')->exists($t->signature_image_path);
+        $this->sigXmm       = $company->signature_x !== null ? (float) $company->signature_x : 0.0;
+        $this->sigYmm       = $company->signature_y !== null ? (float) $company->signature_y : 0.0;
+        $this->sigWmm       = $company->signature_w !== null ? (float) $company->signature_w : 40.0;
+        $this->sigHmm       = $company->signature_h !== null ? (float) $company->signature_h : 20.0;
+        $this->sigConfigured = $company->signature_x !== null;
+
+        $this->anchorText = $company->signature_anchor_text ?? '';
+
+        // Cargar dimensiones de página guardadas (fallback: A4 portrait)
+        $this->pageWmm = $company->signature_page_w ? (float) $company->signature_page_w : 210.0;
+        $this->pageHmm = $company->signature_page_h ? (float) $company->signature_page_h : 297.0;
+
+        $this->previewAvailable = !empty($company->signature_preview_path)
+            && Storage::disk('local')->exists($company->signature_preview_path);
+
+        $this->signatureAvailable = !empty($company->signature_image_path)
+            && Storage::disk('local')->exists($company->signature_image_path);
     }
 
     // ── Upload: PDF de muestra ────────────────────────────────────────────────
@@ -68,20 +97,44 @@ class SignatureConfigurator extends Component
         try {
             Storage::disk('local')->makeDirectory('signatures');
 
-            $pdfRelPath = 'signatures/sample_preview.pdf';
+            $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
+            $company = Company::find($companyId);
+
+            $pdfRelPath = "signatures/company_{$companyId}_sample_preview.pdf";
 
             if (Storage::disk('local')->exists($pdfRelPath)) {
                 Storage::disk('local')->delete($pdfRelPath);
             }
 
-            $this->samplePdf->storeAs('signatures', 'sample_preview.pdf', 'local');
+            $this->samplePdf->storeAs('signatures', "company_{$companyId}_sample_preview.pdf", 'local');
 
-            $tenant = Tenant::find(tenant('id'));
-            $tenant->signature_preview_path = $pdfRelPath;
-            $tenant->save();
+            $company->signature_preview_path = $pdfRelPath;
+
+            // ── Detectar orientación/dimensiones de página con FPDI ──────────
+            try {
+                $pdfAbsPath = Storage::disk('local')->path($pdfRelPath);
+                $fpdi = new Fpdi();
+                $fpdi->setSourceFile($pdfAbsPath);
+                $tplId = $fpdi->importPage(1);
+                $size  = $fpdi->getTemplateSize($tplId);
+                unset($fpdi);
+
+                $pageW = round((float) $size['width'],  2);
+                $pageH = round((float) $size['height'], 2);
+
+                $company->signature_page_w = $pageW;
+                $company->signature_page_h = $pageH;
+
+                $this->pageWmm = $pageW;
+                $this->pageHmm = $pageH;
+            } catch (\Throwable) {
+                // Si FPDI no puede leer el PDF, conservar las dimensiones previas.
+            }
+
+            $company->save();
 
             $this->previewAvailable = true;
-            $this->dispatch('preview-ready');
+            $this->dispatch('preview-ready', pageW: $this->pageWmm, pageH: $this->pageHmm);
 
         } catch (\Exception $e) {
             $this->uploadError = 'Error al guardar el PDF: ' . $e->getMessage();
@@ -99,12 +152,16 @@ class SignatureConfigurator extends Component
 
         try {
             Storage::disk('local')->makeDirectory('signatures');
-            $ext  = strtolower($this->signatureImage->getClientOriginalExtension());
-            $path = $this->signatureImage->storeAs('signatures', 'employer_signature.' . $ext, 'local');
+            
+            $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
+            $company = Company::find($companyId);
 
-            $tenant = Tenant::find(tenant('id'));
-            $tenant->signature_image_path = $path;
-            $tenant->save();
+            $ext  = strtolower($this->signatureImage->getClientOriginalExtension());
+            $filename = "company_{$companyId}_employer_signature.{$ext}";
+            $path = $this->signatureImage->storeAs('signatures', $filename, 'local');
+
+            $company->signature_image_path = $path;
+            $company->save();
 
             $this->signatureAvailable = true;
             $this->dispatch('signature-image-ready');
@@ -114,6 +171,25 @@ class SignatureConfigurator extends Component
         }
 
         $this->reset('signatureImage');
+    }
+
+    // ── Guardar texto ancla ────────────────────────────────────────────────────
+
+    public function saveAnchorText(): void
+    {
+        $this->validate(['anchorText' => 'nullable|string|max:255']);
+
+        $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
+        $company = Company::find($companyId);
+
+        if (!$company) {
+            return;
+        }
+
+        $company->signature_anchor_text = trim($this->anchorText) ?: null;
+        $company->save();
+
+        $this->anchorText = $company->signature_anchor_text ?? '';
     }
 
     // ── Guardar coordenadas desde AlpineJS ────────────────────────────────────
@@ -129,30 +205,37 @@ class SignatureConfigurator extends Component
     ): void {
         if ($cw <= 0 || $ch <= 0) return;
 
-        // Regla de tres: píxeles de pantalla → milímetros A4
-        $wMm = ($w / $cw) * self::PAGE_W_MM;
-        $hMm = ($h / $ch) * self::PAGE_H_MM;
-        $xMm = ($x / $cw) * self::PAGE_W_MM;
-        $yMm = ($y / $ch) * self::PAGE_H_MM;
+        // Regla de tres: píxeles de pantalla → milímetros reales de la página
+        $pW = $this->pageWmm > 0 ? $this->pageWmm : self::PAGE_W_MM;
+        $pH = $this->pageHmm > 0 ? $this->pageHmm : self::PAGE_H_MM;
+
+        $wMm = ($w / $cw) * $pW;
+        $hMm = ($h / $ch) * $pH;
+        $xMm = ($x / $cw) * $pW;
+        $yMm = ($y / $ch) * $pH;
 
         // Clamp: el recuadro no puede salir del área de la hoja
-        $wMm = max(5.0,  min($wMm, self::PAGE_W_MM));
-        $hMm = max(5.0,  min($hMm, self::PAGE_H_MM));
-        $xMm = max(0.0,  min($xMm, self::PAGE_W_MM - $wMm));
-        $yMm = max(0.0,  min($yMm, self::PAGE_H_MM - $hMm));
+        $wMm = max(5.0,  min($wMm, $pW));
+        $hMm = max(5.0,  min($hMm, $pH));
+        $xMm = max(0.0,  min($xMm, $pW - $wMm));
+        $yMm = max(0.0,  min($yMm, $pH - $hMm));
 
-        $tenant = Tenant::find(tenant('id'));
-        $tenant->signature_x = round($xMm, 2);
-        $tenant->signature_y = round($yMm, 2);
-        $tenant->signature_w = round($wMm, 2);
-        $tenant->signature_h = round($hMm, 2);
-        $tenant->save();
+        $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
+        $company = Company::find($companyId);
+        
+        if ($company) {
+            $company->signature_x = round($xMm, 2);
+            $company->signature_y = round($yMm, 2);
+            $company->signature_w = round($wMm, 2);
+            $company->signature_h = round($hMm, 2);
+            $company->save();
 
-        $this->sigXmm         = $tenant->signature_x;
-        $this->sigYmm         = $tenant->signature_y;
-        $this->sigWmm         = $tenant->signature_w;
-        $this->sigHmm         = $tenant->signature_h;
-        $this->coordinatesSaved = true;
+            $this->sigXmm         = $company->signature_x;
+            $this->sigYmm         = $company->signature_y;
+            $this->sigWmm         = $company->signature_w;
+            $this->sigHmm         = $company->signature_h;
+            $this->coordinatesSaved = true;
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────

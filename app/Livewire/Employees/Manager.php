@@ -6,6 +6,7 @@ use Livewire\Component;
 use Livewire\WithPagination;
 use App\Models\User;
 use App\Models\EmployeeProfile;
+use App\Services\CompanyContextService;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Livewire\WithFileUploads;
@@ -17,7 +18,11 @@ class Manager extends Component
     public $search = '';
     public $showModal = false;
     public $isEditing = false;
-    
+
+    // Importación de Empleados Existentes
+    public $showImportModal = false;
+    public $searchImport = '';
+
     public $csvFile;
 
     // Form fields
@@ -31,10 +36,23 @@ class Manager extends Component
 
     protected function rules()
     {
+        $profileId = $this->isEditing ? EmployeeProfile::where('user_id', $this->userId)->first()->id ?? null : null;
+        $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
+
         return [
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email,' . $this->userId,
-            'cuil' => 'required|string|unique:employee_profiles,cuil,' . ($this->isEditing ? EmployeeProfile::where('user_id', $this->userId)->first()->id ?? 'NULL' : 'NULL'),
+            'email' => [
+                'required',
+                'email',
+                \Illuminate\Validation\Rule::unique('users', 'email')->ignore($this->userId)
+            ],
+            'cuil' => [
+                'required',
+                'string',
+                \Illuminate\Validation\Rule::unique('employee_profiles', 'cuil')
+                    ->ignore($profileId)
+                    ->where('company_id', $companyId)
+            ],
             'document_number' => 'nullable|string',
             'department' => 'nullable|string',
             'is_active' => 'boolean',
@@ -44,6 +62,11 @@ class Manager extends Component
     public function updatingSearch()
     {
         $this->resetPage();
+    }
+
+    public function updatingSearchImport()
+    {
+        // Se autodispara al escribir en el campo de búsqueda de importación
     }
 
     public function openModal()
@@ -58,6 +81,18 @@ class Manager extends Component
         $this->resetForm();
     }
 
+    public function openImportModal()
+    {
+        $this->searchImport = '';
+        $this->showImportModal = true;
+    }
+
+    public function closeImportModal()
+    {
+        $this->showImportModal = false;
+        $this->searchImport = '';
+    }
+
     public function resetForm()
     {
         $this->reset(['userId', 'name', 'email', 'cuil', 'document_number', 'department', 'is_active', 'isEditing']);
@@ -66,17 +101,18 @@ class Manager extends Component
 
     public function edit($id)
     {
-        $user = User::with('employeeProfile')->findOrFail($id);
-        
+        $user    = User::findOrFail($id);
+        $profile = EmployeeProfile::where('user_id', $user->id)->first();
+
         $this->userId = $user->id;
-        $this->name = $user->name;
-        $this->email = $user->email;
-        
-        if ($user->employeeProfile) {
-            $this->cuil = $user->employeeProfile->cuil;
-            $this->document_number = $user->employeeProfile->document_number;
-            $this->department = $user->employeeProfile->department;
-            $this->is_active = $user->employeeProfile->is_active;
+        $this->name   = $user->name;
+        $this->email  = $user->email;
+
+        if ($profile) {
+            $this->cuil            = $profile->cuil;
+            $this->document_number = $profile->document_number;
+            $this->department      = $profile->department;
+            $this->is_active       = $profile->is_active;
         }
 
         $this->isEditing = true;
@@ -94,13 +130,16 @@ class Manager extends Component
                 'email' => $this->email,
             ]);
 
-            $user->employeeProfile()->updateOrCreate(
-                ['user_id' => $user->id],
+            EmployeeProfile::updateOrCreate(
                 [
-                    'cuil' => $this->cuil,
+                    'user_id'    => $user->id,
+                    'company_id' => app(CompanyContextService::class)->getCurrentCompanyId(),
+                ],
+                [
+                    'cuil'            => $this->cuil,
                     'document_number' => $this->document_number,
-                    'department' => $this->department,
-                    'is_active' => $this->is_active,
+                    'department'      => $this->department,
+                    'is_active'       => $this->is_active,
                 ]
             );
 
@@ -114,11 +153,12 @@ class Manager extends Component
             ]);
 
             $employeeProfile = EmployeeProfile::create([
-                'user_id' => $user->id,
-                'cuil' => $this->cuil,
+                'user_id'         => $user->id,
+                'company_id'      => app(CompanyContextService::class)->getCurrentCompanyId(),
+                'cuil'            => $this->cuil,
                 'document_number' => $this->document_number,
-                'department' => $this->department,
-                'is_active' => $this->is_active,
+                'department'      => $this->department,
+                'is_active'       => $this->is_active,
             ]);
 
             // Sincronizar con Base Central (Identidad Global)
@@ -138,11 +178,45 @@ class Manager extends Component
         $this->closeModal();
     }
 
+    public function importUser($userId)
+    {
+        $user = User::withoutGlobalScopes()->findOrFail($userId);
+        $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
+
+        // Evitar doble importación
+        $exists = EmployeeProfile::withoutGlobalScopes()
+            ->where('user_id', $user->id)
+            ->where('company_id', $companyId)
+            ->exists();
+
+        if ($exists) {
+            session()->flash('message', 'El empleado ya está registrado en esta empresa.');
+            return;
+        }
+
+        // Buscar un perfil existente en otra empresa para copiar el CUIL y DNI
+        $existingProfile = EmployeeProfile::withoutGlobalScopes()
+            ->where('user_id', $user->id)
+            ->first();
+
+        EmployeeProfile::create([
+            'user_id'         => $user->id,
+            'company_id'      => $companyId,
+            'cuil'            => $existingProfile ? $existingProfile->cuil : '',
+            'document_number' => $existingProfile ? $existingProfile->document_number : null,
+            'department'      => null, // Departamento por defecto vacío en nueva empresa
+            'is_active'       => true,
+        ]);
+
+        $this->closeImportModal();
+        session()->flash('message', 'Empleado vinculado exitosamente a esta empresa.');
+    }
+
     public function resetPassword($id)
     {
         $user = User::findOrFail($id);
         $newPassword = Str::random(10);
-        
+
         $user->update([
             'password' => Hash::make($newPassword)
         ]);
@@ -167,18 +241,18 @@ class Manager extends Component
         ]);
 
         $path = $this->csvFile->getRealPath();
-        
+
         $lines = file($path);
         // Detectar si el delimitador es punto y coma (Excel en español) o coma
         $delimiter = (isset($lines[0]) && strpos($lines[0], ';') !== false) ? ';' : ',';
-        
+
         $data = array_map(function($line) use ($delimiter) {
             return str_getcsv($line, $delimiter);
         }, $lines);
-        
+
         // Asumimos que la fila 1 es la cabecera (Nombre, Email, CUIL, DNI, Depto)
-        array_shift($data); 
-        
+        array_shift($data);
+
         $imported = 0;
         foreach($data as $row) {
             // Validar que la fila tenga al menos Nombre, Email y CUIL
@@ -199,13 +273,16 @@ class Manager extends Component
                         ]
                     );
 
-                    $user->employeeProfile()->updateOrCreate(
-                        ['user_id' => $user->id],
+                    EmployeeProfile::updateOrCreate(
                         [
-                            'cuil' => $cuil,
+                            'user_id'    => $user->id,
+                            'company_id' => app(CompanyContextService::class)->getCurrentCompanyId(),
+                        ],
+                        [
+                            'cuil'            => $cuil,
                             'document_number' => $dni,
-                            'department' => $depto,
-                            'is_active' => true
+                            'department'      => $depto,
+                            'is_active'       => true,
                         ]
                     );
 
@@ -231,19 +308,53 @@ class Manager extends Component
 
     public function render()
     {
+        $currentCompanyId = app(CompanyContextService::class)->getCurrentCompanyId();
+
         $employees = User::where('role', 'employee')
-            ->with('employeeProfile')
+            ->whereHas('currentCompanyProfile', function($query) use ($currentCompanyId) {
+                // Aislamos estrictamente a la empresa activa
+                $query->where('company_id', $currentCompanyId);
+            })
+            ->with(['currentCompanyProfile'])
             ->when($this->search, function ($query) {
-                $query->where('name', 'like', '%' . $this->search . '%')
-                      ->orWhere('email', 'like', '%' . $this->search . '%')
-                      ->orWhereHas('employeeProfile', function ($q) {
-                          $q->where('cuil', 'like', '%' . $this->search . '%');
-                      });
+                $query->where(function($subQuery) {
+                    $subQuery->where('name', 'like', '%' . $this->search . '%')
+                             ->orWhere('email', 'like', '%' . $this->search . '%')
+                             ->orWhereHas('currentCompanyProfile', function ($q) {
+                                 $q->where('cuil', 'like', '%' . $this->search . '%');
+                             });
+                });
             })
             ->paginate(10);
 
+        // Resultados para el modal de Importación (Búsqueda global en el Tenant)
+        $importCandidates = [];
+        if ($this->showImportModal && strlen($this->searchImport) >= 3) {
+            $importCandidates = User::withoutGlobalScopes()
+                ->where('role', 'employee')
+                ->whereDoesntHave('employeeProfiles', function ($query) use ($currentCompanyId) {
+                    // Excluimos los que ya tienen perfil en ESTA empresa
+                    $query->where('company_id', $currentCompanyId);
+                })
+                ->where(function ($query) {
+                    $query->where('name', 'like', '%' . $this->searchImport . '%')
+                          ->orWhere('email', 'like', '%' . $this->searchImport . '%')
+                          ->orWhereHas('employeeProfiles', function ($sub) {
+                              $sub->withoutGlobalScopes()
+                                  ->where('cuil', 'like', '%' . $this->searchImport . '%')
+                                  ->orWhere('document_number', 'like', '%' . $this->searchImport . '%');
+                          });
+                })
+                ->with(['employeeProfiles' => function($q) {
+                    $q->withoutGlobalScopes();
+                }])
+                ->take(5)
+                ->get();
+        }
+
         return view('livewire.employees.manager', [
-            'employees' => $employees
+            'employees' => $employees,
+            'importCandidates' => $importCandidates
         ])->layout('components.layouts.app', [
             'header' => 'Gestión de Empleados',
             'title' => 'Empleados - BonosWeb'

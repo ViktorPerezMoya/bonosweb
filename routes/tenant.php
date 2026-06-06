@@ -7,6 +7,8 @@ use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
 use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
 use App\Livewire\Dashboard;
 use App\Livewire\Auth\Login;
+use App\Models\Company;
+use App\Services\CompanyContextService;
 
 /*
 |--------------------------------------------------------------------------
@@ -33,8 +35,15 @@ Route::middleware([
     Route::get('/login', Login::class)->name('login')->middleware('guest');
 
     // ── Branding assets (sin auth — necesario para fondo en login) ────────────
-    Route::get('/branding/logo', function () {
-        $path = tenant('logo_path');
+    Route::get('/branding/logo/{company?}', function ($company = null) {
+        if ($company) {
+            $companyModel = \App\Models\Company::find($company);
+        } else {
+            $service = app(\App\Services\CompanyContextService::class);
+            $companyModel = \App\Models\Company::find($service->getCurrentCompanyId());
+        }
+
+        $path = $companyModel?->logo_path;
         if (!$path || !\Illuminate\Support\Facades\Storage::disk('public')->exists($path)) abort(404);
         $abs      = \Illuminate\Support\Facades\Storage::disk('public')->path($path);
         $mimeType = mime_content_type($abs) ?: 'image/png';
@@ -64,7 +73,12 @@ Route::middleware([
     Route::middleware(['auth'])->group(function () {
         Route::get('/dashboard', Dashboard::class)->name('dashboard');
         Route::get('/profile', App\Livewire\Profile\UpdateProfile::class)->name('profile.show');
-        Route::get('/billing', App\Livewire\Billing\TenantBilling::class)->name('billing.index');
+        Route::get('/billing', App\Livewire\Billing\TenantBilling::class)->name('billing.index')->middleware('tenant.admin');
+
+        // ── Vista de empleado (solo sus recibos) ──────────────────────────────
+        // Accesible con cualquier rol autenticado. El login redirige aquí a los
+        // empleados que ingresan con DNI/CUIL.
+        Route::get('/mis-bonos', App\Livewire\Employees\MisBonos::class)->name('employee.my-payslips');
 
         Route::get('/employees', App\Livewire\Employees\Manager::class)->name('employees.index');
         Route::get('/employees/{id}/history', App\Livewire\Employees\History::class)->name('employees.history');
@@ -77,16 +91,19 @@ Route::middleware([
         Route::get('/reports/signatures', App\Livewire\Reports\SignaturesTracking::class)->name('reports.signatures');
 
         Route::get('/users', App\Livewire\Tenant\UsersManager::class)->name('users.index');
+        Route::get('/empresas', App\Livewire\Tenant\CompanyCreator::class)->name('companies.create');
 
-        // ── Configuración de firma visual del empleador ───────────────────────
-        Route::get('/configuracion/firma', App\Livewire\Tenant\SignatureConfigurator::class)->name('signature.configurator');
-
-        // ── Identidad visual del tenant (logo + fondo de login) ───────────────
-        Route::get('/configuracion/branding', App\Livewire\Tenant\BrandingSettings::class)->name('branding.settings');
+        // ── Secciones exclusivas de Administrador ────────────────────────────
+        Route::middleware('tenant.admin')->group(function () {
+            Route::get('/configuracion/firma', App\Livewire\Tenant\SignatureConfigurator::class)->name('signature.configurator');
+            Route::get('/configuracion/branding', App\Livewire\Tenant\BrandingSettings::class)->name('branding.settings');
+        });
 
         // Servir imagen de previsualización (primera página del PDF modelo)
         Route::get('/configuracion/firma/preview-image', function () {
-            $path = tenant('signature_preview_path');
+            $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
+            $company = Company::find($companyId);
+            $path = $company ? $company->signature_preview_path : null;
             if (!$path || !\Illuminate\Support\Facades\Storage::disk('local')->exists($path)) abort(404);
             return response()->file(
                 \Illuminate\Support\Facades\Storage::disk('local')->path($path),
@@ -96,7 +113,9 @@ Route::middleware([
 
         // Servir imagen de la firma del empleador
         Route::get('/configuracion/firma/signature-image', function () {
-            $path = tenant('signature_image_path');
+            $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
+            $company = Company::find($companyId);
+            $path = $company ? $company->signature_image_path : null;
             if (!$path || !\Illuminate\Support\Facades\Storage::disk('local')->exists($path)) abort(404);
             $absPath  = \Illuminate\Support\Facades\Storage::disk('local')->path($path);
             $mimeType = mime_content_type($absPath) ?: 'image/png';

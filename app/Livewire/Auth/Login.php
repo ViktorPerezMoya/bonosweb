@@ -2,47 +2,140 @@
 
 namespace App\Livewire\Auth;
 
-use Livewire\Component;
+use App\Models\EmployeeProfile;
+use App\Models\Scopes\CurrentCompanyScope;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Livewire\Component;
 
+/**
+ * Login con autenticación dinámica.
+ *
+ * ┌──────────────────────────────────────────────────────────────────────────┐
+ * │ Tipo de credencial detectada automáticamente:                            │
+ * │  · Email válido  →  busca en users.email           →  Admin / RRHH      │
+ * │  · 10-11 dígitos →  busca en employee_profiles.cuil →  Empleado         │
+ * │  · 7-8 dígitos   →  busca en employee_profiles.document_number → Empl.  │
+ * │                                                                          │
+ * │ Redirección post-login:                                                  │
+ * │  · Admin / RRHH  →  /dashboard  (panel de gestión)                      │
+ * │  · Empleado      →  /mis-bonos  (vista móvil de recibos propios)         │
+ * └──────────────────────────────────────────────────────────────────────────┘
+ */
 class Login extends Component
 {
-    public $email;
-    public $password;
-    public $remember = false;
+    /** Acepta: email, CUIL (10-11 dígitos) o DNI (7-8 dígitos). */
+    public string $credential = '';
+    public string $password   = '';
+    public bool   $remember   = false;
 
     protected $rules = [
-        'email' => 'required|email',
-        'password' => 'required',
+        'credential' => 'required|string',
+        'password'   => 'required|string',
     ];
 
-    public function login()
+    protected $messages = [
+        'credential.required' => 'Ingresá tu email, DNI o CUIL.',
+        'password.required'   => 'La contraseña es requerida.',
+    ];
+
+    // ── Punto de entrada ──────────────────────────────────────────────────────
+
+    public function login(): mixed
     {
         $this->validate();
 
-        if (Auth::attempt(['email' => $this->email, 'password' => $this->password], $this->remember)) {
-            session()->regenerate();
+        $input = trim($this->credential);
 
-            // Solo permitir acceso si es HR o Admin
-            if(in_array(Auth::user()->role, ['hr', 'admin'])) {
-                return redirect()->intended('/dashboard');
-            } else {
-                Auth::logout();
-                session()->invalidate();
-                session()->regenerateToken();
-                $this->addError('email', 'Acceso denegado. Solo personal de RRHH.');
-            }
-        } else {
-            $this->addError('email', 'Las credenciales proporcionadas no coinciden con nuestros registros.');
+        if (filter_var($input, FILTER_VALIDATE_EMAIL)) {
+            return $this->loginWithEmail($input);
         }
+
+        if (preg_match('/^\d{10,11}$/', $input)) {
+            // CUIL argentino: 11 dígitos (o 10 en casos raros)
+            return $this->loginWithDniOrCuil($input, 'cuil');
+        }
+
+        if (preg_match('/^\d{7,8}$/', $input)) {
+            // DNI: 7 u 8 dígitos
+            return $this->loginWithDniOrCuil($input, 'document_number');
+        }
+
+        $this->addError('credential', 'Ingresá un email válido, un DNI (7-8 dígitos) o un CUIL (11 dígitos).');
+        return null;
     }
 
-    public function render()
+    // ── Estrategia 1: Login por Email (Admin / RRHH) ──────────────────────────
+
+    private function loginWithEmail(string $email): mixed
+    {
+        if (! Auth::attempt(['email' => $email, 'password' => $this->password], $this->remember)) {
+            $this->addError('credential', 'Las credenciales no coinciden con nuestros registros.');
+            return null;
+        }
+
+        session()->regenerate();
+        $role = Auth::user()->role;
+
+        if (in_array($role, ['hr', 'admin'])) {
+            return redirect()->intended(route('dashboard'));
+        }
+
+        if ($role === 'employee') {
+            // Un empleado que tiene email también puede iniciar sesión por email
+            return redirect()->route('employee.my-payslips');
+        }
+
+        Auth::logout();
+        session()->invalidate();
+        session()->regenerateToken();
+        $this->addError('credential', 'Acceso denegado. Tu usuario no tiene un rol válido.');
+        return null;
+    }
+
+    // ── Estrategia 2: Login por CUIL / DNI (Empleados) ───────────────────────
+
+    private function loginWithDniOrCuil(string $value, string $field): mixed
+    {
+        $profile = EmployeeProfile::withoutGlobalScope(CurrentCompanyScope::class)
+            ->where($field, $value)
+            ->where('is_active', true)
+            ->with('user')
+            ->first();
+
+        if (! $profile || ! $profile->user) {
+            $this->addError('credential', 'No se encontró un empleado activo con ese dato.');
+            return null;
+        }
+
+        if (! Hash::check($this->password, $profile->user->password)) {
+            $this->addError('credential', 'Contraseña incorrecta.');
+            return null;
+        }
+
+        Auth::login($profile->user, $this->remember);
+        session()->regenerate();
+
+        return redirect()->route('employee.my-payslips');
+    }
+
+    // ── Render ────────────────────────────────────────────────────────────────
+
+    public function render(): \Illuminate\Contracts\View\View
     {
         $bgUrl = null;
+        $mainCompanyLogoUrl = null;
         if (function_exists('tenant') && $t = tenant()) {
             $bgUrl = $t->loginBackgroundUrl();
+            
+            $mainCompany = \App\Models\Company::where('is_main', true)->first();
+            if ($mainCompany && $mainCompany->logo_path) {
+                $mainCompanyLogoUrl = route('branding.logo', $mainCompany->id);
+            }
         }
-        return view('livewire.auth.login', ['bgUrl' => $bgUrl])->layout('components.layouts.app');
+        return view('livewire.auth.login', [
+            'bgUrl' => $bgUrl,
+            'mainCompanyLogoUrl' => $mainCompanyLogoUrl,
+        ])->layout('components.layouts.app');
     }
 }

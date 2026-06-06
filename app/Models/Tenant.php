@@ -37,20 +37,15 @@ class Tenant extends BaseTenant implements TenantWithDatabase
             'signature_h',
             'signature_image_path',
             'signature_preview_path',
+            // Dimensiones del PDF de muestra (mm) para el canvas del configurador
+            'signature_page_w',
+            'signature_page_h',
             // Branding visual del tenant
-            'logo_path',
             'login_background_path',
         ];
     }
 
-    /** URL pública del logo del tenant, o null si no tiene uno configurado. */
-    public function logoUrl(): ?string
-    {
-        if ($this->logo_path) {
-            return route('branding.logo');
-        }
-        return null;
-    }
+
 
     /** URL pública del fondo de login del tenant, o null si no tiene uno configurado. */
     public function loginBackgroundUrl(): ?string

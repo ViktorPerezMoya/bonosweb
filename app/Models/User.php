@@ -49,10 +49,44 @@ class User extends Authenticatable
     }
 
     /**
-     * Get the employee profile associated with the user.
+     * Todos los perfiles del empleado (uno por empresa).
+     */
+    public function employeeProfiles()
+    {
+        return $this->hasMany(EmployeeProfile::class);
+    }
+
+    /**
+     * Perfil principal (empresa principal del tenant).
      */
     public function employeeProfile()
     {
+        return $this->hasOne(EmployeeProfile::class)
+            ->whereHas('company', fn ($q) => $q->where('is_main', true));
+    }
+
+    /**
+     * Perfil del empleado en la empresa activa del contexto.
+     * No restringe por is_main; el CurrentCompanyScope de EmployeeProfile
+     * se encarga de filtrar por la empresa en sesión.
+     */
+    public function currentCompanyProfile()
+    {
         return $this->hasOne(EmployeeProfile::class);
+    }
+
+    /**
+     * Empresas a las que el usuario tiene acceso directo como empleado.
+     * Usa employee_profiles como tabla pivote (user_id → company_id).
+     * Solo es relevante para el rol 'employee'; admin y rrhh usan Company::all().
+     */
+    public function companies()
+    {
+        return $this->belongsToMany(Company::class, 'employee_profiles', 'user_id', 'company_id');
+    }
+
+    public function payslips()
+    {
+        return $this->hasMany(Payslip::class, 'employee_id');
     }
 }
