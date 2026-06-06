@@ -52,33 +52,46 @@ class CompanyCertificateGenerator
         // El campo serialNumber almacena el CUIT como identificador único legal.
         $dn = [
             'countryName'            => 'AR',
-            'stateOrProvinceName'    => 'Argentina',
-            'localityName'           => 'Argentina',
-            'organizationName'       => $companyName,
-            'organizationalUnitName' => 'Recursos Humanos',
+            'stateOrProvinceName'    => 'Mendoza',
+            'localityName'           => 'Mendoza',
+            'organizationName'       => 'bonosweb.com.ar',
+            //'organizationalUnitName' => 'Recursos Humanos',
             'commonName'             => $companyName,
             'serialNumber'           => $cuit,
         ];
 
-        // ── 3. CSR + certificado autofirmado — 5 años = 1825 días ─────────────
+        // ── 3. CSR (Certificate Signing Request) ──────────────────────────────
         $csr = openssl_csr_new($dn, $privkey, ['digest_alg' => 'sha256']);
 
         if ($csr === false) {
             throw new RuntimeException('No se pudo crear la solicitud de firma (CSR).');
         }
 
-        $x509 = openssl_csr_sign($csr, null, $privkey, 1825, ['digest_alg' => 'sha256']);
+        // ── 3.5. Cargar Certificado y Clave Raíz (Root CA) central ────────────
+        $rootCertPath = base_path('storage/app/private/certs/system_cert.crt');
+        $rootKeyPath  = base_path('storage/app/private/certs/system_cert.key');
 
-        if ($x509 === false) {
-            throw new RuntimeException('No se pudo firmar el certificado X.509.');
+        if (!file_exists($rootCertPath) || !file_exists($rootKeyPath)) {
+            throw new RuntimeException('No se encontró el certificado o llave raíz de BonosWeb CA. Ejecute bonosweb:generate-root-ca.');
         }
 
-        // ── 4. Contraseña segura aleatoria de 32 caracteres hexadecimales ─────
+        $rootCert = file_get_contents($rootCertPath);
+        $rootKey  = file_get_contents($rootKeyPath);
+
+        // ── 4. Firmar el certificado usando el Root CA — 5 años = 1825 días ───
+        $x509 = openssl_csr_sign($csr, $rootCert, $rootKey, 1825, ['digest_alg' => 'sha256']);
+
+        if ($x509 === false) {
+            throw new RuntimeException('No se pudo firmar el certificado X.509 con el Root CA.');
+        }
+
+        // ── 5. Contraseña segura aleatoria de 32 caracteres hexadecimales ─────
         // random_bytes() usa una fuente criptográficamente segura (CSPRNG).
         $plainPassword = bin2hex(random_bytes(16));
 
-        // ── 5. Empaquetar cert + clave privada en PKCS#12 (.pfx) ─────────────
-        $ok = openssl_pkcs12_export($x509, $pfxContent, $privkey, $plainPassword);
+        // ── 6. Empaquetar cert + clave privada en PKCS#12 (.pfx) ─────────────
+        // Incluimos el Root CA en 'extracerts' para adjuntar la cadena de confianza
+        $ok = openssl_pkcs12_export($x509, $pfxContent, $privkey, $plainPassword, ['extracerts' => $rootCert]);
 
         if (! $ok || empty($pfxContent)) {
             throw new RuntimeException(

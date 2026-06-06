@@ -145,7 +145,7 @@ class TenantsManager extends Component
 
     /**
      * Genera un par de claves RSA 2048-bit, crea un certificado X.509 autofirmado
-     * (SHA-256, 10 años), exporta en formato PEM y persiste en el disco central.
+     * (SHA-256, 5 años), exporta en formato PEM y persiste en el disco central.
      */
     private function buildAndStoreCertificate(Tenant $tenant): void
     {
@@ -153,8 +153,8 @@ class TenantsManager extends Component
             'countryName'            => 'AR',
             'stateOrProvinceName'    => 'Mendoza',
             'localityName'           => 'Mendoza',
-            'organizationName'       => $tenant->company_name,
-            'organizationalUnitName' => 'Recursos Humanos',
+            'organizationName'       => 'bonosweb.com.ar',
+            //'organizationalUnitName' => 'Recursos Humanos',
             'commonName'             => $tenant->company_name,
             'emailAddress'           => 'rrhh@' . $tenant->id . '.bonosweb.com',
         ];
@@ -165,7 +165,7 @@ class TenantsManager extends Component
         ]);
 
         $csr  = openssl_csr_new($dn, $privkey, ['digest_alg' => 'sha256']);
-        $x509 = openssl_csr_sign($csr, null, $privkey, 3650, ['digest_alg' => 'sha256']);
+        $x509 = openssl_csr_sign($csr, null, $privkey, 1825, ['digest_alg' => 'sha256']);
 
         openssl_pkey_export($privkey, $pkeyout);
         openssl_x509_export($x509, $certout);
@@ -179,7 +179,7 @@ class TenantsManager extends Component
 
         $tenant->cert_path     = $certName;
         $tenant->cert_key_path = $keyName;
-        $tenant->cert_expiry   = now()->addYears(10)->toDateString();
+        $tenant->cert_expiry   = now()->addYears(5)->toDateString();
         $tenant->save();
 
         session()->flash('message', "Certificado criptográfico generado para {$tenant->company_name}.");
@@ -289,8 +289,8 @@ class TenantsManager extends Component
             'countryName'            => 'AR',
             'stateOrProvinceName'    => 'Mendoza',
             'localityName'           => 'Mendoza',
-            'organizationName'       => $companyData['name'],
-            'organizationalUnitName' => 'Recursos Humanos',
+            'organizationName'       => 'bonosweb.com.ar',
+            //'organizationalUnitName' => 'Recursos Humanos',
             'commonName'             => $companyData['name'],
             'emailAddress'           => 'rrhh@' . $tenant->id . '.bonosweb.com',
         ];
@@ -301,10 +301,24 @@ class TenantsManager extends Component
         ]);
 
         $csr  = openssl_csr_new($dn, $privkey, ['digest_alg' => 'sha256']);
-        $x509 = openssl_csr_sign($csr, null, $privkey, 3650, ['digest_alg' => 'sha256']);
+        
+        // Cargar Certificado y Clave Raíz (Root CA) central
+        $rootCertPath = base_path('storage/app/private/certs/system_cert.crt');
+        $rootKeyPath  = base_path('storage/app/private/certs/system_cert.key');
+
+        if (!file_exists($rootCertPath) || !file_exists($rootKeyPath)) {
+            throw new \RuntimeException('No se encontró el certificado o llave raíz de BonosWeb CA. Ejecute bonosweb:generate-root-ca.');
+        }
+
+        $rootCert = file_get_contents($rootCertPath);
+        $rootKey  = file_get_contents($rootKeyPath);
+
+        // Firmar con Root CA
+        $x509 = openssl_csr_sign($csr, $rootCert, $rootKey, 1825, ['digest_alg' => 'sha256']);
 
         // 3. Exportar como PKCS#12 (cert + key en un solo archivo, sin contraseña)
-        openssl_pkcs12_export($x509, $pfxContent, $privkey, '');
+        // Incluimos el Root CA en 'extracerts'
+        openssl_pkcs12_export($x509, $pfxContent, $privkey, '', ['extracerts' => $rootCert]);
 
         // 4. Persistir en el disco del tenant y actualizar la BD
         $pfxRelPath = sprintf('certs/company_%d_%s.pfx', $companyId, now()->format('Ymd_His'));
