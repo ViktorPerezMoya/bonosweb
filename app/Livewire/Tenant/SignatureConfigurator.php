@@ -8,6 +8,9 @@ use App\Services\CompanyContextService;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
 use Livewire\WithFileUploads;
+use App\Pdf\CustomFpdi;
+use App\Services\PdfCoordinateExtractor;
+use Illuminate\Support\Facades\Log;
 use setasign\Fpdi\Tcpdf\Fpdi;
 
 class SignatureConfigurator extends Component
@@ -36,6 +39,7 @@ class SignatureConfigurator extends Component
 
     // ── Texto ancla para posicionamiento dinámico ─────────────────────────────
     public string $anchorText = '';
+    public float $anchorOffsetY = 10.0;
 
     // ── Dimensiones reales de la página (mm) ─────────────────────────────────
     // Detectadas al subir el PDF de muestra; defecto A4 portrait.
@@ -75,6 +79,7 @@ class SignatureConfigurator extends Component
         $this->sigConfigured = $company->signature_x !== null;
 
         $this->anchorText = $company->signature_anchor_text ?? '';
+        $this->anchorOffsetY = $company->signature_anchor_offset_y ?? 10.0;
 
         // Cargar dimensiones de página guardadas (fallback: A4 portrait)
         $this->pageWmm = $company->signature_page_w ? (float) $company->signature_page_w : 210.0;
@@ -177,7 +182,10 @@ class SignatureConfigurator extends Component
 
     public function saveAnchorText(): void
     {
-        $this->validate(['anchorText' => 'nullable|string|max:255']);
+        $this->validate([
+            'anchorText' => 'nullable|string|max:255',
+            'anchorOffsetY' => 'required|numeric|min:0|max:100',
+        ]);
 
         $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
         $company = Company::find($companyId);
@@ -187,9 +195,86 @@ class SignatureConfigurator extends Component
         }
 
         $company->signature_anchor_text = trim($this->anchorText) ?: null;
+        $company->signature_anchor_offset_y = $this->anchorOffsetY;
         $company->save();
 
         $this->anchorText = $company->signature_anchor_text ?? '';
+        $this->anchorOffsetY = $company->signature_anchor_offset_y ?? 10.0;
+        
+        session()->flash('message', 'Ajuste de ancla guardado correctamente.');
+    }
+
+    // ── Previsualizar Ajuste (Preview Modal) ───────────────────────────────────
+
+    public function generatePreview()
+    {
+        $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
+        $company = Company::find($companyId);
+
+        if (!$company || empty($company->signature_preview_path) || empty($company->signature_image_path)) {
+            session()->flash('error', 'Falta el PDF de muestra o la imagen de firma.');
+            return;
+        }
+
+        if (empty($this->anchorText)) {
+            session()->flash('error', 'Debes configurar un texto ancla primero.');
+            return;
+        }
+
+        $srcPath = Storage::disk('local')->path($company->signature_preview_path);
+        $sigImagePath = Storage::disk('local')->path($company->signature_image_path);
+
+        if (!file_exists($srcPath) || !file_exists($sigImagePath)) {
+            session()->flash('error', 'No se encuentran los archivos en el servidor.');
+            return;
+        }
+
+        try {
+            $anchored = app(PdfCoordinateExtractor::class)->findCoordinates($srcPath, $this->anchorText);
+
+            if (!$anchored) {
+                session()->flash('error', 'Texto ancla no encontrado en el PDF.');
+                return;
+            }
+
+            $fpdi = new CustomFpdi();
+            $fpdi->setSourceFile($srcPath);
+            $tplId = $fpdi->importPage(1);
+            $size = $fpdi->getTemplateSize($tplId);
+
+            $fpdi->AddPage($size['orientation'], [$size['width'], $size['height']]);
+            $fpdi->useTemplate($tplId, 0, 0, $size['width'], $size['height']);
+
+            $sigX = $company->signature_x ?? 0.0;
+            $sigW = $company->signature_w ?? 40.0;
+            $sigH = $company->signature_h ?? 20.0;
+            $sigY = $size['height'] - $anchored['y_mm_from_bottom'] - $sigH - $this->anchorOffsetY;
+            
+            $ext = strtolower(pathinfo($sigImagePath, PATHINFO_EXTENSION));
+            if (!in_array($ext, ['png', 'jpg', 'jpeg'])) {
+                $ext = 'png';
+            }
+
+            $fpdi->Image($sigImagePath, $sigX, $sigY, $sigW, $sigH, strtoupper($ext));
+
+            Log::info('Preview generado', [
+                'y_mm_from_bottom' => $anchored['y_mm_from_bottom'],
+                'offsetY' => $this->anchorOffsetY,
+                'x' => $sigX,
+                'y' => $sigY,
+                'w' => $sigW,
+                'h' => $sigH,
+            ]);
+
+            $pdfContent = $fpdi->Output('', 'S');
+            $base64 = base64_encode($pdfContent);
+
+            $this->dispatch('preview-generated', data: 'data:application/pdf;base64,' . $base64);
+
+        } catch (\Exception $e) {
+            Log::error("Error al generar preview de firma: " . $e->getMessage());
+            session()->flash('error', 'Error al procesar el PDF: ' . $e->getMessage());
+        }
     }
 
     // ── Guardar coordenadas desde AlpineJS ────────────────────────────────────

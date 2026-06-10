@@ -176,26 +176,58 @@
                             </div>
                         </div>
 
-                        {{-- Estado del certificado --}}
-                        <div class="flex-shrink-0 text-xs">
-                            @if (! $hasCert)
-                                <span class="flex items-center gap-1" style="color: var(--warning);">
-                                    <i class="ri-error-warning-line"></i> Sin certificado
+                        {{-- Estado del certificado y Switch de Activación --}}
+                        <div class="flex-shrink-0 flex flex-col items-end gap-3 text-xs">
+                            <div class="flex items-center gap-2">
+                                @if (! $hasCert)
+                                    <span class="flex items-center gap-1" style="color: var(--warning);">
+                                        <i class="ri-error-warning-line"></i> Sin certificado
+                                    </span>
+                                @elseif ($isExpiring)
+                                    <span class="flex items-center gap-1" style="color: var(--warning);">
+                                        <i class="ri-time-line"></i>
+                                        Vence {{ \Carbon\Carbon::parse($company->signature_pfx_expires_at)->format('d/m/Y') }}
+                                    </span>
+                                @else
+                                    <span class="flex items-center gap-1" style="color: var(--success);">
+                                        <i class="ri-shield-check-line"></i>
+                                        Cert. activo
+                                        @if ($company->signature_pfx_expires_at)
+                                            hasta {{ \Carbon\Carbon::parse($company->signature_pfx_expires_at)->format('d/m/Y') }}
+                                        @endif
+                                    </span>
+                                @endif
+
+                                {{-- Botón de Renovar --}}
+                                <button type="button"
+                                        wire:click="renewCertificate({{ $company->id }})"
+                                        wire:confirm="¿Estás seguro de generar un nuevo certificado? Esto invalidará el certificado actual para futuras firmas."
+                                        wire:loading.attr="disabled"
+                                        wire:target="renewCertificate"
+                                        class="ml-1 flex items-center justify-center rounded p-1 transition-colors hover:bg-white/10"
+                                        title="Renovar Certificado"
+                                        style="color: var(--accent);">
+                                    <i wire:loading.remove wire:target="renewCertificate({{ $company->id }})" class="ri-refresh-line text-sm"></i>
+                                    <i wire:loading wire:target="renewCertificate({{ $company->id }})" class="ri-loader-4-line text-sm" style="animation: spin 0.9s linear infinite;"></i>
+                                </button>
+                            </div>
+
+                            {{-- Switch de Activación --}}
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs" style="color: var(--text-secondary);">
+                                    {{ $company->is_active ? 'Activa' : 'Desactivada' }}
                                 </span>
-                            @elseif ($isExpiring)
-                                <span class="flex items-center gap-1" style="color: var(--warning);">
-                                    <i class="ri-time-line"></i>
-                                    Vence {{ \Carbon\Carbon::parse($company->signature_pfx_expires_at)->format('d/m/Y') }}
-                                </span>
-                            @else
-                                <span class="flex items-center gap-1" style="color: var(--success);">
-                                    <i class="ri-shield-check-line"></i>
-                                    Certificado activo
-                                    @if ($company->signature_pfx_expires_at)
-                                        · hasta {{ \Carbon\Carbon::parse($company->signature_pfx_expires_at)->format('d/m/Y') }}
-                                    @endif
-                                </span>
-                            @endif
+                                <button type="button"
+                                        wire:click="toggleActive({{ $company->id }})"
+                                        @if($company->is_main) disabled title="La empresa principal no puede desactivarse" @endif
+                                        class="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 {{ $company->is_active ? 'bg-indigo-500' : 'bg-gray-600' }} {{ $company->is_main ? 'opacity-50 cursor-not-allowed' : '' }}"
+                                        role="switch"
+                                        aria-checked="{{ $company->is_active ? 'true' : 'false' }}">
+                                    <span aria-hidden="true"
+                                          class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out {{ $company->is_active ? 'translate-x-4' : 'translate-x-0' }}">
+                                    </span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 @endforeach

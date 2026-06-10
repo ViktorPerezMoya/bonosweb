@@ -1,18 +1,30 @@
 <div x-data="{ open: false }" class="relative">
 
     {{-- Trigger button --}}
-    <button @click="open = !open"
-            class="flex items-center gap-2 px-3 py-1.5
-                   rounded-lg bg-white/10 hover:bg-white/15 transition-colors
-                   text-sm font-medium text-white border border-white/10"
-            :class="open ? 'bg-white/15' : ''"
-            type="button"
-            style="max-width: 180px;">
-        <i class="ri-building-2-line text-accent shrink-0"></i>
-        <span class="truncate flex-1 text-left">{{ $currentCompanyName }}</span>
-        <i class="ri-arrow-down-s-line shrink-0 transition-transform duration-200"
-           :class="open ? 'rotate-180' : ''"></i>
-    </button>
+    @if($companies->isEmpty())
+        <button disabled
+                class="flex items-center gap-2 px-3 py-1.5
+                       rounded-lg bg-white/5 opacity-50 cursor-not-allowed
+                       text-sm font-medium text-white border border-white/5"
+                type="button"
+                style="max-width: 180px;">
+            <i class="ri-building-2-line text-white/50 shrink-0"></i>
+            <span class="truncate flex-1 text-left text-white/50">Sin Empresa</span>
+        </button>
+    @else
+        <button @click="open = !open"
+                class="flex items-center gap-2 px-3 py-1.5
+                       rounded-lg bg-white/10 hover:bg-white/15 transition-colors
+                       text-sm font-medium text-white border border-white/10"
+                :class="open ? 'bg-white/15' : ''"
+                type="button"
+                style="max-width: 180px;">
+            <i class="ri-building-2-line text-accent shrink-0"></i>
+            <span class="truncate flex-1 text-left">{{ $currentCompanyName }}</span>
+            <i class="ri-arrow-down-s-line shrink-0 transition-transform duration-200"
+               :class="open ? 'rotate-180' : ''"></i>
+        </button>
+    @endif
 
     {{-- Dropdown
          Se posiciona con position:fixed para escapar de cualquier stacking context

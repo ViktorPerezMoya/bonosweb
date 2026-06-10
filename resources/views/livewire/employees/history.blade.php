@@ -15,10 +15,23 @@
             <div>
                 <h3 style="margin-bottom: 0.25rem;">{{ $employee->name }}</h3>
                 <p style="color: var(--text-secondary); font-size: 0.9rem;">
-                    CUIL: <strong style="color: var(--text-primary);">{{ $employee->employeeProfile->cuil ?? 'N/A' }}</strong> | 
+                    CUIL: <strong style="color: var(--text-primary);">{{ $employee->currentCompanyProfile->cuil ?? 'N/A' }}</strong> | 
                     Email: <strong style="color: var(--text-primary);">{{ $employee->email }}</strong> |
-                    Depto: <strong style="color: var(--text-primary);">{{ $employee->employeeProfile->department ?? 'N/A' }}</strong>
+                    Depto: <strong style="color: var(--text-primary);">{{ $employee->currentCompanyProfile->department ?? 'N/A' }}</strong>
                 </p>
+                @if ($employee->currentCompanyProfile)
+                    <div style="margin-top: 0.5rem;">
+                        @if ($employee->currentCompanyProfile->certificate_expires_at)
+                            @if ($employee->currentCompanyProfile->certificate_expires_at->isPast())
+                                <span class="badge" style="background: rgba(239, 68, 68, 0.1); color: var(--danger);"><i class="ri-error-warning-line"></i> Certificado Expirado</span>
+                            @else
+                                <span class="badge" style="background: rgba(16, 185, 129, 0.1); color: var(--success);"><i class="ri-shield-check-line"></i> Cert. Válido hasta: {{ $employee->currentCompanyProfile->certificate_expires_at->format('d/m/Y') }}</span>
+                            @endif
+                        @else
+                            <span class="badge" style="background: rgba(245, 158, 11, 0.1); color: var(--warning);"><i class="ri-loader-4-line" style="animation: spin 1s linear infinite;"></i> Generando Certificado...</span>
+                        @endif
+                    </div>
+                @endif
             </div>
         </div>
     </div>

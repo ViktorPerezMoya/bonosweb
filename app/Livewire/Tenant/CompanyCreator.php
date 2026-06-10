@@ -131,6 +131,71 @@ class CompanyCreator extends Component
         }
     }
 
+    public function toggleActive(int $companyId): void
+    {
+        $company = Company::withoutGlobalScope(CurrentCompanyScope::class)->findOrFail($companyId);
+
+        if ($company->is_main) {
+            session()->flash('error', 'La empresa principal no puede ser deshabilitada.');
+            return;
+        }
+
+        $company->is_active = !$company->is_active;
+        $company->save();
+
+        $status = $company->is_active ? 'activada' : 'desactivada';
+        session()->flash('message', "La empresa «{$company->name}» ha sido {$status}.");
+        
+        // Disparar evento para actualizar el CompanySwitcher u otros componentes
+        $this->dispatch('company-updated');
+    }
+
+    /**
+     * Renueva el certificado digital (.pfx) de la empresa especificada.
+     */
+    public function renewCertificate(int $companyId): void
+    {
+        abort_if(
+            auth()->user()->role !== 'admin',
+            403,
+            'Solo los administradores pueden gestionar empresas y sus certificados.'
+        );
+
+        $company = Company::withoutGlobalScope(CurrentCompanyScope::class)->findOrFail($companyId);
+
+        try {
+            // Eliminar certificado anterior si existe
+            if ($company->signature_pfx_path) {
+                \Illuminate\Support\Facades\Storage::disk('local')->delete($company->signature_pfx_path);
+            }
+
+            // Generar nuevo certificado
+            /** @var CompanyCertificateGenerator $certGenerator */
+            $certGenerator = app(CompanyCertificateGenerator::class);
+            $certData      = $certGenerator->generate($company->name, $company->cuit, $company->id);
+
+            // Actualizar modelo
+            $company->update([
+                'signature_pfx_path'       => $certData['pfx_path'],
+                'signature_pfx_password'   => $certData['pfx_password'],
+                'signature_pfx_expires_at' => $certData['expires_at'],
+            ]);
+
+            session()->flash(
+                'message',
+                "Certificado renovado exitosamente para «{$company->name}». Válido hasta {$certData['expires_at']}."
+            );
+
+        } catch (\Throwable $e) {
+            Log::error('[CompanyCreator] Error al renovar certificado.', [
+                'company_id' => $companyId,
+                'error'      => $e->getMessage(),
+            ]);
+
+            session()->flash('error', 'No se pudo renovar el certificado: ' . $e->getMessage());
+        }
+    }
+
     // ── Render ────────────────────────────────────────────────────────────────
 
     public function render(): \Illuminate\Contracts\View\View

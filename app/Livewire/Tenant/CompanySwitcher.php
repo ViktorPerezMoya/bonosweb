@@ -24,14 +24,26 @@ class CompanySwitcher extends Component
         $user = auth()->user();
 
         // Los empleados solo ven las empresas donde tienen un legajo activo.
-        // Admin y RRHH ven todas las empresas del tenant.
+        // Los admins ven todas las empresas activas del tenant.
+        // Los RRHH ven solo las empresas activas que tienen explícitamente asignadas.
         if ($user->role === 'employee') {
             $this->companies = $user->companies()
+                ->where('employee_profiles.is_active', true)
+                ->where('companies.is_active', true)
+                ->orderByDesc('companies.is_main')
+                ->orderBy('companies.name')
+                ->get();
+        } elseif ($user->role === 'hr') {
+            $this->companies = $user->accessibleCompanies()
+                ->where('companies.is_active', true)
+                ->orderByDesc('companies.is_main')
+                ->orderBy('companies.name')
+                ->get();
+        } else {
+            $this->companies = Company::where('is_active', true)
                 ->orderByDesc('is_main')
                 ->orderBy('name')
                 ->get();
-        } else {
-            $this->companies = Company::orderByDesc('is_main')->orderBy('name')->get();
         }
 
         $this->currentCompanyId   = app(CompanyContextService::class)->getCurrentCompanyId();

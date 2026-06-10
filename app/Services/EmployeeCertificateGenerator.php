@@ -6,34 +6,22 @@ use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
 /**
- * Servicio de generación de certificados digitales PKCS#12 para empresas.
- *
- * Responsabilidad única: dado el nombre, CUIT e ID de una Company, genera un
- * par de claves RSA 2048-bit, construye un certificado X.509 autofirmado con
- * SHA-256 y lo empaqueta en formato .pfx protegido por una contraseña segura.
- *
- * DEBE invocarse dentro del contexto del tenant (dentro de $tenant->run() o
- * desde una petición de tenant), ya que Storage::disk('local') apuntará al
- * directorio privado del tenant: storage/tenant{id}/app/
+ * Servicio de generación de certificados digitales PKCS#12 para empleados.
  */
-class CompanyCertificateGenerator
+class EmployeeCertificateGenerator
 {
     /**
-     * Genera el certificado .pfx para una empresa y lo persiste en el disco
+     * Genera el certificado .pfx para un empleado y lo persiste en el disco
      * privado del tenant.
      *
-     * @param  string  $companyName  Razón social de la empresa
-     * @param  string  $cuit         CUIT sin guiones (11 dígitos)
-     * @param  int     $companyId    ID de la empresa en la BD del tenant
+     * @param  string  $employeeName Nombre completo del empleado
+     * @param  string  $cuil         CUIL o DNI del empleado
+     * @param  string  $companyName  Nombre de la empresa activa
+     * @param  int     $employeeId   ID del perfil del empleado
      *
      * @return array{pfx_path: string, pfx_password: string, expires_at: string}
-     *   - pfx_path:     Ruta relativa dentro del disco 'local' del tenant
-     *   - pfx_password: Contraseña cifrada con encrypt() lista para la BD
-     *   - expires_at:   Fecha de vencimiento en formato Y-m-d (5 años)
-     *
-     * @throws RuntimeException Si OpenSSL no puede generar o exportar el certificado
      */
-    public function generate(string $companyName, string $cuit, int $companyId): array
+    public function generate(string $employeeName, string $cuil, string $companyName, int $employeeId): array
     {
         // ── 1. Par de claves RSA 2048-bit ─────────────────────────────────────
         $privkey = openssl_pkey_new([
@@ -48,16 +36,14 @@ class CompanyCertificateGenerator
             );
         }
 
-        // ── 2. Distinguished Name con metadatos de la empresa ─────────────────
-        // El campo serialNumber almacena el CUIT como identificador único legal.
+        // ── 2. Distinguished Name con metadatos del empleado ─────────────────
         $dn = [
             'countryName'            => 'AR',
             'stateOrProvinceName'    => 'Mendoza',
             'localityName'           => 'Mendoza',
-            'organizationName'       => 'bonosweb.com.ar',
-            //'organizationalUnitName' => 'Recursos Humanos',
-            'commonName'             => $companyName,
-            'serialNumber'           => $cuit,
+            'organizationName'       => $companyName,
+            'organizationalUnitName' => $cuil,
+            'commonName'             => $employeeName,
         ];
 
         // ── 3. CSR (Certificate Signing Request) ──────────────────────────────
@@ -86,11 +72,9 @@ class CompanyCertificateGenerator
         }
 
         // ── 5. Contraseña segura aleatoria de 32 caracteres hexadecimales ─────
-        // random_bytes() usa una fuente criptográficamente segura (CSPRNG).
         $plainPassword = bin2hex(random_bytes(16));
 
         // ── 6. Empaquetar cert + clave privada en PKCS#12 (.pfx) ─────────────
-        // Incluimos el Root CA en 'extracerts' para adjuntar la cadena de confianza
         $ok = openssl_pkcs12_export($x509, $pfxContent, $privkey, $plainPassword, ['extracerts' => $rootCert]);
 
         if (! $ok || empty($pfxContent)) {
@@ -100,12 +84,10 @@ class CompanyCertificateGenerator
             );
         }
 
-        // ── 6. Persistir en el disco privado del tenant ───────────────────────
-        // En contexto tenant: Storage::disk('local') → storage/tenant{id}/app/
-        // La subcarpeta 'certs/' NO es pública (no tiene symlink).
+        // ── 7. Persistir en el disco privado del tenant ───────────────────────
         $relativePath = sprintf(
-            'certs/companies/company_%d_%s.pfx',
-            $companyId,
+            'certs/employees/employee_%d_%s.pfx',
+            $employeeId,
             now()->format('Ymd_His')
         );
 
@@ -116,7 +98,6 @@ class CompanyCertificateGenerator
 
         return [
             'pfx_path'     => $relativePath,
-            // encrypt() usa la APP_KEY para cifrado AES-256-CBC: seguro para BD
             'pfx_password' => encrypt($plainPassword),
             'expires_at'   => now()->addYears(5)->toDateString(),
         ];

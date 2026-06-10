@@ -89,4 +89,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(Payslip::class, 'employee_id');
     }
+
+    /**
+     * Empresas a las que el usuario (RRHH/Admin) tiene acceso explícito.
+     */
+    public function accessibleCompanies()
+    {
+        return $this->belongsToMany(Company::class, 'company_user_access', 'user_id', 'company_id')->withTimestamps();
+    }
 }

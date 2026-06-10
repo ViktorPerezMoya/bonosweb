@@ -48,6 +48,7 @@
                 'reports/signatures'    => ['icon' => 'ri-shield-check-line',          'label' => 'Auditoría de Firmas'],
                 'users'                 => ['icon' => 'ri-user-settings-line',         'label' => 'Usuarios RRHH'],
                 'configuracion/firma'   => ['icon' => 'ri-pen-nib-line',               'label' => 'Firma Empleador'],
+                'configuracion/certificado-raiz'=> ['icon' => 'ri-shield-keyhole-line',     'label' => 'Certificado Raíz'],
                 'configuracion/branding'=> ['icon' => 'ri-palette-line',                'label' => 'Identidad Visual'],
                 'billing'               => ['icon' => 'ri-money-dollar-circle-line',   'label' => 'Mi Cuenta'],
                 'profile'               => ['icon' => 'ri-user-line',                  'label' => 'Mi Perfil'],

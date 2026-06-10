@@ -23,3 +23,6 @@ Schedule::job(new GenerateMonthlyInvoicesJob)->dailyAt('09:00');
 // Suspende tenants con deuda vencida hace +2 semanas: se ejecuta cada día a las 08:00 hs.
 // Corre antes que la generación para no suspender el mismo día que se factura.
 Schedule::job(new SuspendOverdueTenantsJob)->dailyAt('08:00');
+
+// Renovación automática de certificados digitales para empleados a las 02:00 hs
+Schedule::command('bonosweb:renew-employee-certs')->dailyAt('02:00');

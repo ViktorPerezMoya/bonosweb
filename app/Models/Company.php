@@ -20,10 +20,12 @@ class Company extends Model
         'signature_image_path',
         'signature_preview_path',
         'signature_anchor_text',
+        'signature_anchor_offset_y',
         'signature_page_w',
         'signature_page_h',
         'logo_path',
         'hide_name_in_menu',
+        'is_active',
     ];
 
     protected function casts(): array
@@ -36,8 +38,10 @@ class Company extends Model
             'signature_y'                => 'float',
             'signature_w'                => 'float',
             'signature_h'                => 'float',
+            'signature_anchor_offset_y'  => 'float',
             'signature_page_w'           => 'float',
             'signature_page_h'           => 'float',
+            'is_active'                  => 'boolean',
         ];
     }
 

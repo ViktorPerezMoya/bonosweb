@@ -161,6 +161,8 @@ class Manager extends Component
                 'is_active'       => $this->is_active,
             ]);
 
+            \App\Jobs\GenerateEmployeeCertificate::dispatch($employeeProfile->id);
+
             // Sincronizar con Base Central (Identidad Global)
             $globalUser = \App\Models\GlobalUser::firstOrCreate(
                 ['cuil' => $this->cuil],
@@ -199,7 +201,7 @@ class Manager extends Component
             ->where('user_id', $user->id)
             ->first();
 
-        EmployeeProfile::create([
+        $profile = EmployeeProfile::create([
             'user_id'         => $user->id,
             'company_id'      => $companyId,
             'cuil'            => $existingProfile ? $existingProfile->cuil : '',
@@ -207,6 +209,8 @@ class Manager extends Component
             'department'      => null, // Departamento por defecto vacío en nueva empresa
             'is_active'       => true,
         ]);
+
+        \App\Jobs\GenerateEmployeeCertificate::dispatch($profile->id);
 
         $this->closeImportModal();
         session()->flash('message', 'Empleado vinculado exitosamente a esta empresa.');
@@ -273,7 +277,7 @@ class Manager extends Component
                         ]
                     );
 
-                    EmployeeProfile::updateOrCreate(
+                    $profile = EmployeeProfile::updateOrCreate(
                         [
                             'user_id'    => $user->id,
                             'company_id' => app(CompanyContextService::class)->getCurrentCompanyId(),
@@ -285,6 +289,10 @@ class Manager extends Component
                             'is_active'       => true,
                         ]
                     );
+
+                    if ($profile->wasRecentlyCreated || !$profile->certificate_path) {
+                        \App\Jobs\GenerateEmployeeCertificate::dispatch($profile->id);
+                    }
 
                     // Sincronizar con Base Central (Identidad Global)
                     $globalUser = \App\Models\GlobalUser::firstOrCreate(

@@ -13,9 +13,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->group('universal', []);
 
-        // Alias para proteger rutas exclusivas de administradores tenant.
+        // Alias para proteger rutas exclusivas de administradores tenant y contexto válido.
         $middleware->alias([
             'tenant.admin' => \App\Http\Middleware\EnsureTenantAdmin::class,
+            'tenant.context' => \App\Http\Middleware\EnsureValidCompanyContext::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

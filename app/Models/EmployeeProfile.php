@@ -20,7 +20,23 @@ class EmployeeProfile extends Model
         'file_number',
         'department',
         'is_active',
+        'certificate_path',
+        'certificate_password',
+        'certificate_expires_at',
     ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'is_active' => 'boolean',
+            'certificate_expires_at' => 'datetime',
+        ];
+    }
 
     public function user()
     {

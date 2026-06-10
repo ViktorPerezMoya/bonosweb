@@ -16,7 +16,7 @@ class History extends Component
     public function mount($id)
     {
         $this->employeeId = $id;
-        $this->employee = User::with('employeeProfile')->findOrFail($id);
+        $this->employee = User::with('currentCompanyProfile')->findOrFail($id);
     }
 
     public function viewPdf($payslipId)

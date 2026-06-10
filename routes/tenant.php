@@ -75,20 +75,22 @@ Route::middleware([
         Route::get('/profile', App\Livewire\Profile\UpdateProfile::class)->name('profile.show');
         Route::get('/billing', App\Livewire\Billing\TenantBilling::class)->name('billing.index')->middleware('tenant.admin');
 
-        // ── Vista de empleado (solo sus recibos) ──────────────────────────────
-        // Accesible con cualquier rol autenticado. El login redirige aquí a los
-        // empleados que ingresan con DNI/CUIL.
-        Route::get('/mis-bonos', App\Livewire\Employees\MisBonos::class)->name('employee.my-payslips');
+        // ── Rutas protegidas por contexto de empresa válido ───────────────────
+        Route::middleware('tenant.context')->group(function () {
+            // Empleado
+            Route::get('/mis-bonos', App\Livewire\Employees\MisBonos::class)->name('employee.my-payslips');
 
-        Route::get('/employees', App\Livewire\Employees\Manager::class)->name('employees.index');
-        Route::get('/employees/{id}/history', App\Livewire\Employees\History::class)->name('employees.history');
-        Route::get('/employees/{id}/export-history', [App\Http\Controllers\PayslipController::class, 'exportHistory'])->name('employees.export-history');
+            // RRHH / Admin
+            Route::get('/employees', App\Livewire\Employees\Manager::class)->name('employees.index');
+            Route::get('/employees/{id}/history', App\Livewire\Employees\History::class)->name('employees.history');
+            Route::get('/employees/{id}/export-history', [App\Http\Controllers\PayslipController::class, 'exportHistory'])->name('employees.export-history');
 
-        Route::get('/payslips/upload', App\Livewire\Payslips\Upload::class)->name('payslips.upload');
-        Route::get('/payslips/list', App\Livewire\Payslips\PayslipList::class)->name('payslips.list');
-        Route::get('/payslips/{id}/view', [App\Http\Controllers\PayslipController::class, 'view'])->name('payslips.view');
+            Route::get('/payslips/upload', App\Livewire\Payslips\Upload::class)->name('payslips.upload');
+            Route::get('/payslips/list', App\Livewire\Payslips\PayslipList::class)->name('payslips.list');
+            Route::get('/payslips/{id}/view', [App\Http\Controllers\PayslipController::class, 'view'])->name('payslips.view');
 
-        Route::get('/reports/signatures', App\Livewire\Reports\SignaturesTracking::class)->name('reports.signatures');
+            Route::get('/reports/signatures', App\Livewire\Reports\SignaturesTracking::class)->name('reports.signatures');
+        });
 
         Route::get('/users', App\Livewire\Tenant\UsersManager::class)->name('users.index');
         Route::get('/empresas', App\Livewire\Tenant\CompanyCreator::class)->name('companies.create');
@@ -98,6 +100,10 @@ Route::middleware([
             Route::get('/configuracion/firma', App\Livewire\Tenant\SignatureConfigurator::class)->name('signature.configurator');
             Route::get('/configuracion/branding', App\Livewire\Tenant\BrandingSettings::class)->name('branding.settings');
         });
+
+        // Certificado Raíz (accesible para admin y rrhh)
+        Route::get('/configuracion/certificado-raiz', App\Livewire\Tenant\RootCertificateDownload::class)
+            ->name('root.certificate.download');
 
         // Servir imagen de previsualización (primera página del PDF modelo)
         Route::get('/configuracion/firma/preview-image', function () {

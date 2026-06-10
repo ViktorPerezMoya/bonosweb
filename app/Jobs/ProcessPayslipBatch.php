@@ -114,7 +114,13 @@ class ProcessPayslipBatch implements ShouldQueue
                     continue;
                 }
 
-                $processed += (int) $this->persistPayslip($profile, $fullPath, basename($file));
+                $anchored = null;
+                if (!empty($this->sigConfig['anchor_text'])) {
+                    $anchored = app(PdfCoordinateExtractor::class)
+                        ->findCoordinates($fullPath, $this->sigConfig['anchor_text']);
+                }
+
+                $processed += (int) $this->persistPayslip($profile, $fullPath, basename($file), $anchored);
 
             } catch (Exception $e) {
                 $errors[] = 'Error procesando ' . basename($file) . ': ' . $e->getMessage();
@@ -170,10 +176,14 @@ class ProcessPayslipBatch implements ShouldQueue
             try {
                 $pageText = $pages[$pageNo - 1]->getText();
 
+                $anchored = null;
+                if (!empty($this->sigConfig['anchor_text'])) {
+                    $anchored = app(PdfCoordinateExtractor::class)
+                        ->findCoordinatesInPage($pages[$pageNo - 1], $this->sigConfig['anchor_text']);
+                }
+
                 // Liberar el objeto Page de memoria tan pronto como sea posible.
                 // En PDFs masivos de cientos de páginas esto evita agotar la RAM del worker.
-                // Nota: la búsqueda de ancla de texto se realiza después sobre el PDF
-                // individual ya extraído (coordenadas consistentes con el CTM de FPDI).
                 unset($pages[$pageNo - 1]);
 
                 [$cuil, $rawCuil] = $this->extractEmployeeCuil($pageText, $employerCuit);
@@ -201,7 +211,7 @@ class ProcessPayslipBatch implements ShouldQueue
                 $absolutePagePath = Storage::disk('local')->path($pagePath);
                 $originalName     = 'pagina_' . str_pad($pageNo, 4, '0', STR_PAD_LEFT) . '.pdf';
 
-                $processed += (int) $this->persistPayslip($profile, $absolutePagePath, $originalName);
+                $processed += (int) $this->persistPayslip($profile, $absolutePagePath, $originalName, $anchored);
 
                 Storage::disk('local')->delete($pagePath);
 
@@ -302,10 +312,10 @@ class ProcessPayslipBatch implements ShouldQueue
      * Calcula SHA-256, copia el archivo a su ruta final e inserta el Payslip.
      * Aplica rectificativa inmutable: el recibo previo se marca, no se borra.
      */
-    protected function persistPayslip(EmployeeProfile $profile, string $absoluteSrcPath, string $originalName): bool
+    protected function persistPayslip(EmployeeProfile $profile, string $absoluteSrcPath, string $originalName, ?array $anchored = null): bool
     {
         // Estampar firma visual del empleador (si está configurada).
-        $finalContent = $this->stampedPdfContent($absoluteSrcPath);
+        $finalContent = $this->stampedPdfContent($absoluteSrcPath, $anchored);
         $fileHash     = hash('sha256', $finalContent);   // hash del archivo FINAL
         $periodYear   = $this->batch->period_year;
         $periodMonth  = str_pad($this->batch->period_month, 2, '0', STR_PAD_LEFT);
@@ -395,12 +405,11 @@ class ProcessPayslipBatch implements ShouldQueue
             // Dimensiones de página de referencia (mm): se usan para escalar
             // correctamente las coordenadas al tamaño real de cada recibo.
             // Si son null, se asume A4 portrait (210×297 mm) por compatibilidad.
-            'page_w'      => (float) ($company->signature_page_w ?? 210.0),
-            'page_h'      => (float) ($company->signature_page_h ?? 297.0),
-            // Campo ancla: si está configurado el Job intentará posicionar
-            // la firma dinámicamente. Si falla, usa x/y estáticos como fallback.
-            'anchor_text' => $company->signature_anchor_text,
-            'image_path'  => $company->signature_image_path,
+            'page_w'          => (float) ($company->signature_page_w ?? 210.0),
+            'page_h'          => (float) ($company->signature_page_h ?? 297.0),
+            'anchor_text'     => $company->signature_anchor_text,
+            'anchor_offset_y' => (float) ($company->signature_anchor_offset_y ?? 10.0),
+            'image_path'      => $company->signature_image_path,
             'cert_info'   => [
                 'Name'        => $company->name,
                 'Location'    => 'Argentina',
@@ -453,7 +462,7 @@ class ProcessPayslipBatch implements ShouldQueue
      * Si la firma no está configurada o FPDI no soporta el PDF (compressed
      * streams / PDF 1.5+), retorna el PDF original sin modificaciones.
      */
-    protected function stampedPdfContent(string $srcPath): string
+    protected function stampedPdfContent(string $srcPath, ?array $anchored = null): string
     {
         if (!$this->sigConfig) {
             return file_get_contents($srcPath);
@@ -494,55 +503,35 @@ class ProcessPayslipBatch implements ShouldQueue
             $methodUsed = 'Fallback';
 
             // ── Anclaje dinámico: override de X/Y si se encontró el texto ancla ──
-            //
-            // Se busca en $srcPath (PDF individual de una sola página: ya sea el archivo
-            // extraído por extractSinglePage o el PDF individual del ZIP). Esto garantiza
-            // que las coordenadas Tm de smalot sean consistentes con el CTM que FPDI aplicó
-            // al importar la página con useTemplate().
-            //
-            // PdfCoordinateExtractor devuelve Y desde borde INFERIOR en mm.
-            // La fórmula solicitada es: Y_tcpdf = (PageHeight - Y_parser_text) - AltoDeLaFirma
-
             if (!empty($cfg['anchor_text'])) {
-                try {
-                    $anchored = app(PdfCoordinateExtractor::class)
-                        ->findCoordinates($srcPath, $cfg['anchor_text']);
+                if ($anchored !== null) {
+                    $methodUsed = 'TextAnchor';
+                    
+                    $pageHeightMm   = $size['height'];
+                    
+                    $offsetY = $cfg['anchor_offset_y'] ?? 10.0;
+                    $sigY = $pageHeightMm - $anchored['y_mm_from_bottom'] - $sigH - $offsetY;
 
-                    if ($anchored !== null) {
-                        $methodUsed = 'TextAnchor';
-                        
-                        $pageHeightMm   = $size['height'];
-                        
-                        // Mantenemos el X estático configurado en la BD.
-                        // El ancla solo se usa para calcular la "coordenada Y exacta" según el largo,
-                        // evitando el bug donde el parser reporta X=1.0 si el ancla es parte de un bloque largo.
-                        $sigY = $pageHeightMm - $anchored['y_mm_from_bottom'] - $sigH - ($anchored['font_size_mm'] * 25);
-
-                        Log::debug('ProcessPayslipBatch: firma posicionada por ancla de texto.', [
-                            'archivo' => basename($srcPath),
-                            'anchor'  => $cfg['anchor_text'],
-                            'x_mm'    => round($sigX, 2),
-                            'y_mm'    => round($sigY, 2),
-                        ]);
-                    } else {
-                        Log::warning('ProcessPayslipBatch: el texto ancla no se encontro en la pagina.', [
-                            'archivo' => basename($srcPath),
-                            'anchor'  => $cfg['anchor_text'],
-                        ]);
+                    if ($anchored['x_mm'] > 5.0) {
+                        $sigX = $anchored['x_mm'] + 15 - ($sigW / 2);
                     }
-                } catch (\Throwable $anchorEx) {
-                    // Capturar Throwable (no sólo Exception): smalot/pdfparser puede lanzar
-                    // Error/TypeError en PDFs con fuentes o encoding no soportados.
-                    // $sigX/$sigY conservan las coordenadas estáticas como fallback.
-                    Log::warning('ProcessPayslipBatch: ancla de texto falló; usando coordenadas estáticas.', [
+                    Log::debug('ProcessPayslipBatch: firma posicionada por ancla de texto.', [
                         'archivo' => basename($srcPath),
                         'anchor'  => $cfg['anchor_text'],
-                        'error'   => $anchorEx->getMessage(),
-                        'clase'   => get_class($anchorEx),
+                        'y_mm_from_bottom' => $anchored['y_mm_from_bottom'],
+                        'offset_y' => $offsetY,
+                        'x_mm'    => round($sigX, 2),
+                        'y_mm'    => round($sigY, 2),
+                        'w_mm'    => round($sigW, 2),
+                        'h_mm'    => round($sigH, 2),
+                    ]);
+                } else {
+                    Log::warning('ProcessPayslipBatch: el texto ancla no se encontro en la pagina o error al procesar original.', [
+                        'archivo' => basename($srcPath),
+                        'anchor'  => $cfg['anchor_text'],
                     ]);
                 }
             }
-
             // ── Telemetría y Logging (Crucial para el debug) ──────────────────────
             Log::channel('single')->debug('ProcessPayslipBatch: Coordenadas Inyectadas', [
                 'pageNo'      => 1, // srcPath es de una única página

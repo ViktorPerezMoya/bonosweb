@@ -24,6 +24,10 @@ class CurrentCompanyScope implements Scope
 
         if ($companyId) {
             $builder->where($model->getTable() . '.company_id', $companyId);
+        } else {
+            // Fail Closed: si no hay contexto de empresa válido,
+            // blindamos la query para que devuelva exactamente 0 resultados.
+            $builder->whereRaw('1 = 0');
         }
     }
 }

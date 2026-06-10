@@ -203,21 +203,37 @@
             Dejá vacío para usar únicamente la posición arrastrada.
         </p>
 
-        <form wire:submit.prevent="saveAnchorText" style="display: flex; flex-direction: column; gap: 0.75rem; max-width: 480px;">
-            <div>
-                <label for="anchorInput" style="display: block; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.35rem;">
-                    Texto a buscar en el PDF
-                </label>
-                <input
-                    id="anchorInput"
-                    type="text"
-                    wire:model="anchorText"
-                    placeholder="Ej: Firma del Empleador"
-                    maxlength="255"
-                    style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: var(--radius-sm); padding: 0.5rem 0.75rem; color: var(--text-primary); font-size: 0.88rem; outline: none;">
-                @error('anchorText')
-                    <p style="color: var(--danger); font-size: 0.78rem; margin-top: 0.3rem;">{{ $message }}</p>
-                @enderror
+        <form wire:submit.prevent="saveAnchorText" style="display: flex; flex-direction: column; gap: 0.75rem; max-width: 600px;">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="anchorInput" style="display: block; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.35rem;">
+                        Texto a buscar en el PDF
+                    </label>
+                    <input
+                        id="anchorInput"
+                        type="text"
+                        wire:model="anchorText"
+                        placeholder="Ej: Firma del Empleador"
+                        maxlength="255"
+                        style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: var(--radius-sm); padding: 0.5rem 0.75rem; color: var(--text-primary); font-size: 0.88rem; outline: none;">
+                    @error('anchorText')
+                        <p style="color: var(--danger); font-size: 0.78rem; margin-top: 0.3rem;">{{ $message }}</p>
+                    @enderror
+                </div>
+                <div>
+                    <label for="offsetYInput" style="display: block; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.35rem;">
+                        Margen de separación vertical (mm)
+                    </label>
+                    <input
+                        id="offsetYInput"
+                        type="number"
+                        step="0.1"
+                        wire:model="anchorOffsetY"
+                        style="width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: var(--radius-sm); padding: 0.5rem 0.75rem; color: var(--text-primary); font-size: 0.88rem; outline: none;">
+                    @error('anchorOffsetY')
+                        <p style="color: var(--danger); font-size: 0.78rem; margin-top: 0.3rem;">{{ $message }}</p>
+                    @enderror
+                </div>
             </div>
 
             <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
@@ -230,6 +246,13 @@
                     <span wire:loading wire:target="saveAnchorText">
                         <i class="ri-loader-4-line" style="animation: spin 0.8s linear infinite; display: inline-block;"></i>
                     </span>
+                </button>
+
+                <button type="button" class="btn" wire:click="generatePreview" 
+                        style="font-size: 0.85rem; padding: 0.45rem 1.1rem; background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border);"
+                        wire:loading.attr="disabled" wire:target="generatePreview">
+                    <span wire:loading.remove wire:target="generatePreview"><i class="ri-eye-line"></i> Previsualizar Ajuste</span>
+                    <span wire:loading wire:target="generatePreview"><i class="ri-loader-4-line" style="animation: spin 0.8s linear infinite; display: inline-block;"></i></span>
                 </button>
 
                 @if($anchorText)
@@ -428,5 +451,26 @@
         }));
     });
     </script>
+
+    {{-- Modal de Previsualización (AlpineJS) --}}
+    <div x-data="{ showPreview: false, pdfData: '' }"
+         x-on:preview-generated.window="showPreview = true; pdfData = $event.detail.data"
+         x-show="showPreview"
+         style="display: none;"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        
+        <div @click.away="showPreview = false" style="background: var(--bg-card); border: 1px solid var(--glass-border); border-radius: var(--radius-md); width: 100%; max-width: 900px; height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+            <div style="padding: 1rem 1.5rem; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02);">
+                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;"><i class="ri-eye-line" style="color: var(--accent); margin-right: 0.5rem;"></i> Previsualización de Firma con Ancla</h3>
+                <button @click="showPreview = false" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.25rem;">
+                    <i class="ri-close-line"></i>
+                </button>
+            </div>
+            
+            <div style="flex: 1; background: #525659; overflow: hidden;">
+                <iframe :src="pdfData" style="width: 100%; height: 100%; border: none;"></iframe>
+            </div>
+        </div>
+    </div>
 
 </div>

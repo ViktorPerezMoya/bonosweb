@@ -21,15 +21,29 @@ class UsersManager extends Component
     public $password = '';
     public $role = 'hr'; // 'admin' or 'hr'
 
+    public $initialCompanyId = null; // Para la creación
+
+    // Assign Modal
+    public $showAssignModal = false;
+    public $assignUserId = null;
+    public $assignedCompanies = [];
+    public $activeCompanies = [];
+
     public function mount()
     {
         // Solo administradores pueden gestionar usuarios
         abort_if(auth()->user()->role !== 'admin', 403, 'Acceso denegado');
+        $this->activeCompanies = \App\Models\Company::where('is_active', true)->get();
     }
 
     public function openModal()
     {
         $this->resetForm();
+        // Si hay empresas activas, preseleccionar la primera (o la principal)
+        $mainOrFirst = $this->activeCompanies->firstWhere('is_main', true) ?? $this->activeCompanies->first();
+        if ($mainOrFirst) {
+            $this->initialCompanyId = $mainOrFirst->id;
+        }
         $this->showModal = true;
     }
 
@@ -45,6 +59,7 @@ class UsersManager extends Component
         $this->email = '';
         $this->password = '';
         $this->role = 'hr';
+        $this->initialCompanyId = null;
         $this->resetErrorBag();
     }
 
@@ -68,6 +83,10 @@ class UsersManager extends Component
             'role' => 'required|in:admin,hr',
         ];
 
+        if ($this->role === 'hr' && !$this->userId) {
+            $rules['initialCompanyId'] = 'required|exists:companies,id';
+        }
+
         if (!$this->userId || $this->password) {
             $rules['password'] = 'required|min:6';
         }
@@ -88,7 +107,10 @@ class UsersManager extends Component
             User::findOrFail($this->userId)->update($data);
             session()->flash('message', 'Usuario actualizado correctamente.');
         } else {
-            User::create($data);
+            $user = User::create($data);
+            if ($this->role === 'hr' && $this->initialCompanyId) {
+                $user->accessibleCompanies()->sync([$this->initialCompanyId]);
+            }
             session()->flash('message', 'Usuario creado exitosamente.');
         }
 
@@ -105,6 +127,29 @@ class UsersManager extends Component
 
         User::findOrFail($id)->delete();
         session()->flash('message', 'Usuario eliminado correctamente.');
+    }
+
+    public function openAssignModal($id)
+    {
+        $user = User::findOrFail($id);
+        $this->assignUserId = $user->id;
+        $this->assignedCompanies = $user->accessibleCompanies()->pluck('company_id')->map(fn($id) => (string)$id)->toArray();
+        $this->showAssignModal = true;
+    }
+
+    public function closeAssignModal()
+    {
+        $this->showAssignModal = false;
+        $this->assignUserId = null;
+        $this->assignedCompanies = [];
+    }
+
+    public function saveAssignments()
+    {
+        $user = User::findOrFail($this->assignUserId);
+        $user->accessibleCompanies()->sync($this->assignedCompanies);
+        session()->flash('message', 'Accesos granulares actualizados para ' . $user->name);
+        $this->closeAssignModal();
     }
 
     public function render()

@@ -321,7 +321,7 @@ class TenantsManager extends Component
         openssl_pkcs12_export($x509, $pfxContent, $privkey, '', ['extracerts' => $rootCert]);
 
         // 4. Persistir en el disco del tenant y actualizar la BD
-        $pfxRelPath = sprintf('certs/company_%d_%s.pfx', $companyId, now()->format('Ymd_His'));
+        $pfxRelPath = sprintf('certs/companies/company_%d_%s.pfx', $companyId, now()->format('Ymd_His'));
 
         $tenant->run(function () use ($companyId, $pfxContent, $pfxRelPath) {
             // Storage::disk('local') en contexto tenant apunta a

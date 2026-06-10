@@ -78,11 +78,15 @@ class Login extends Component
         $role = Auth::user()->role;
 
         if (in_array($role, ['hr', 'admin'])) {
+            $context = app(\App\Services\CompanyContextService::class);
+            $context->getCurrentCompanyId(); // Inicializa sesión
             return redirect()->intended(route('dashboard'));
         }
 
         if ($role === 'employee') {
             // Un empleado que tiene email también puede iniciar sesión por email
+            $context = app(\App\Services\CompanyContextService::class);
+            $context->getCurrentCompanyId(); // Inicializa sesión
             return redirect()->route('employee.my-payslips');
         }
 
@@ -115,6 +119,9 @@ class Login extends Component
 
         Auth::login($profile->user, $this->remember);
         session()->regenerate();
+        
+        // Forzar inicialización de empresa en sesión
+        session(['current_company_id' => $profile->company_id]);
 
         return redirect()->route('employee.my-payslips');
     }
