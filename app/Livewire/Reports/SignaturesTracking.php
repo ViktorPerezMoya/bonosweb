@@ -12,8 +12,26 @@ class SignaturesTracking extends Component
     use WithPagination;
 
     public $selectedBatchId = null;
+    public $searchName = '';
+    public $searchStatus = '';
+    public $searchDate = '';
 
     public function updatedSelectedBatchId()
+    {
+        $this->resetPage();
+    }
+
+    public function updatingSearchName()
+    {
+        $this->resetPage();
+    }
+
+    public function updatingSearchStatus()
+    {
+        $this->resetPage();
+    }
+
+    public function updatingSearchDate()
     {
         $this->resetPage();
     }
@@ -31,11 +49,23 @@ class SignaturesTracking extends Component
         }
 
         // Obtener los recibos del lote seleccionado
-        $payslips = collect();
         if ($this->selectedBatchId) {
             $payslips = Payslip::with(['employee', 'signature'])
                 ->where('upload_batch_id', $this->selectedBatchId)
                 ->where('is_rectified', false) // Solo mostramos los vigentes
+                ->when($this->searchName !== '', function ($query) {
+                    $query->whereHas('employee', function ($q) {
+                        $q->where('name', 'like', '%' . $this->searchName . '%');
+                    });
+                })
+                ->when($this->searchStatus !== '', function ($query) {
+                    $query->where('status', $this->searchStatus);
+                })
+                ->when($this->searchDate !== '', function ($query) {
+                    $query->whereHas('signature', function ($q) {
+                        $q->whereDate('signed_at', $this->searchDate);
+                    });
+                })
                 ->paginate(15);
         } else {
             $payslips = new \Illuminate\Pagination\LengthAwarePaginator([], 0, 15);

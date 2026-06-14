@@ -2,7 +2,7 @@
     <div class="glass-panel" style="max-width: 600px; margin: 0 auto;">
         <h3 style="margin-bottom: 1rem;">Carga Masiva (Archivo ZIP)</h3>
         <p style="margin-bottom: 2rem; font-size: 0.9rem;">
-            Por favor, suba un único archivo .ZIP que contenga los recibos en formato PDF.
+            Por favor, suba un único archivo .ZIP que contenga los recibos en formato PDF o .PDF(sabana).
             El sistema extraerá automáticamente cada PDF, leerá el CUIL del empleado y se lo asignará a su cuenta.
         </p>
 

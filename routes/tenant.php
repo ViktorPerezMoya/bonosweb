@@ -84,6 +84,7 @@ Route::middleware([
             Route::get('/employees', App\Livewire\Employees\Manager::class)->name('employees.index');
             Route::get('/employees/{id}/history', App\Livewire\Employees\History::class)->name('employees.history');
             Route::get('/employees/{id}/export-history', [App\Http\Controllers\PayslipController::class, 'exportHistory'])->name('employees.export-history');
+            Route::get('/employees/{id}/download-zip', [App\Http\Controllers\PayslipController::class, 'downloadAllZip'])->name('employees.download-zip');
 
             Route::get('/payslips/upload', App\Livewire\Payslips\Upload::class)->name('payslips.upload');
             Route::get('/payslips/list', App\Livewire\Payslips\PayslipList::class)->name('payslips.list');
@@ -99,6 +100,7 @@ Route::middleware([
         Route::middleware('tenant.admin')->group(function () {
             Route::get('/configuracion/firma', App\Livewire\Tenant\SignatureConfigurator::class)->name('signature.configurator');
             Route::get('/configuracion/branding', App\Livewire\Tenant\BrandingSettings::class)->name('branding.settings');
+            Route::get('/configuracion/motivos-disconformidad', App\Livewire\Tenant\DisagreementReasons::class)->name('disagreement-reasons');
         });
 
         // Certificado Raíz (accesible para admin y rrhh)

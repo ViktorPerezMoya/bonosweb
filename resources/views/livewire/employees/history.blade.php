@@ -10,29 +10,35 @@
     </div>
 
     <div class="glass-panel" style="margin-bottom: 2rem;">
-        <div style="display: flex; gap: 2rem; align-items: center;">
-            <i class="ri-user-settings-line" style="font-size: 3rem; color: var(--accent);"></i>
-            <div>
-                <h3 style="margin-bottom: 0.25rem;">{{ $employee->name }}</h3>
-                <p style="color: var(--text-secondary); font-size: 0.9rem;">
-                    CUIL: <strong style="color: var(--text-primary);">{{ $employee->currentCompanyProfile->cuil ?? 'N/A' }}</strong> | 
-                    Email: <strong style="color: var(--text-primary);">{{ $employee->email }}</strong> |
-                    Depto: <strong style="color: var(--text-primary);">{{ $employee->currentCompanyProfile->department ?? 'N/A' }}</strong>
-                </p>
-                @if ($employee->currentCompanyProfile)
-                    <div style="margin-top: 0.5rem;">
-                        @if ($employee->currentCompanyProfile->certificate_expires_at)
-                            @if ($employee->currentCompanyProfile->certificate_expires_at->isPast())
-                                <span class="badge" style="background: rgba(239, 68, 68, 0.1); color: var(--danger);"><i class="ri-error-warning-line"></i> Certificado Expirado</span>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div style="display: flex; gap: 2rem; align-items: center;">
+                <i class="ri-user-settings-line" style="font-size: 3rem; color: var(--accent);"></i>
+                <div>
+                    <h3 style="margin-bottom: 0.25rem;">{{ $employee->name }}</h3>
+                    <p style="color: var(--text-secondary); font-size: 0.9rem;">
+                        CUIL: <strong style="color: var(--text-primary);">{{ $employee->currentCompanyProfile->cuil ?? 'N/A' }}</strong> | 
+                        Email: <strong style="color: var(--text-primary);">{{ $employee->email }}</strong> |
+                        Depto: <strong style="color: var(--text-primary);">{{ $employee->currentCompanyProfile->department ?? 'N/A' }}</strong>
+                    </p>
+                    @if ($employee->currentCompanyProfile)
+                        <div style="margin-top: 0.5rem;">
+                            @if ($employee->currentCompanyProfile->certificate_expires_at)
+                                @if ($employee->currentCompanyProfile->certificate_expires_at->isPast())
+                                    <span class="badge" style="background: rgba(239, 68, 68, 0.1); color: var(--danger);"><i class="ri-error-warning-line"></i> Certificado Expirado</span>
+                                @else
+                                    <span class="badge" style="background: rgba(16, 185, 129, 0.1); color: var(--success);"><i class="ri-shield-check-line"></i> Cert. Válido hasta: {{ $employee->currentCompanyProfile->certificate_expires_at->format('d/m/Y') }}</span>
+                                @endif
                             @else
-                                <span class="badge" style="background: rgba(16, 185, 129, 0.1); color: var(--success);"><i class="ri-shield-check-line"></i> Cert. Válido hasta: {{ $employee->currentCompanyProfile->certificate_expires_at->format('d/m/Y') }}</span>
+                                <span class="badge" style="background: rgba(245, 158, 11, 0.1); color: var(--warning);"><i class="ri-loader-4-line" style="animation: spin 1s linear infinite;"></i> Generando Certificado...</span>
                             @endif
-                        @else
-                            <span class="badge" style="background: rgba(245, 158, 11, 0.1); color: var(--warning);"><i class="ri-loader-4-line" style="animation: spin 1s linear infinite;"></i> Generando Certificado...</span>
-                        @endif
-                    </div>
-                @endif
+                        </div>
+                    @endif
+                </div>
             </div>
+            
+            <a href="{{ route('employees.download-zip', ['id' => $employeeId]) }}" class="btn px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition flex items-center gap-2 text-sm font-medium" style="background: rgba(37, 99, 235, 1); border-color: rgba(37, 99, 235, 1); box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.39);">
+                <i class="ri-file-zip-line text-lg"></i> Descargar ZIP Masivo
+            </a>
         </div>
     </div>
 
@@ -63,10 +69,14 @@
                             {{ $payslip->original_filename }}
                         </td>
                         <td>
-                            @if($payslip->signature)
-                                <span class="badge badge-success"><i class="ri-check-line"></i> Firmado</span>
+                            @if(in_array($payslip->status, ['signed_conforme', 'signed_no_conforme']) || $payslip->signature)
+                                <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: var(--success);">
+                                    <i class="ri-check-shield-line"></i> Firmado
+                                </span>
                             @else
-                                <span class="badge badge-pending"><i class="ri-time-line"></i> Pendiente</span>
+                                <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: var(--warning);">
+                                    <i class="ri-time-line"></i> Pendiente
+                                </span>
                             @endif
                         </td>
                         <td style="font-size: 0.85rem;">

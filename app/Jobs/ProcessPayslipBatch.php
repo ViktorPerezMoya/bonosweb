@@ -553,10 +553,11 @@ class ProcessPayslipBatch implements ShouldQueue
                 $fpdi->setSignature(
                     $cfg['cert_pem'],
                     $cfg['key_pem'],
-                    '',   // sin contraseña: la clave ya fue extraída del PFX
+                    '',   // sin contraseña
                     '',   // sin cadena de certificados adicional
-                    2,
-                    $cfg['cert_info']
+                    3,    // cert_type
+                    $cfg['cert_info'],
+                    'A'   // <--- MODO APROBACIÓN (Desactiva el DocMDP estricto)
                 );
             }
 

@@ -104,6 +104,23 @@
                 </button>
             </div>
 
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div>
+                    <input type="text" wire:model.live="searchName" placeholder="Buscar por empleado..." class="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <select wire:model.live="searchStatus" class="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Todos los estados</option>
+                        <option value="pending">Pendientes</option>
+                        <option value="signed_conforme">Firmado Conforme</option>
+                        <option value="signed_no_conforme">Firmado No Conforme</option>
+                    </select>
+                </div>
+                <div>
+                    <input type="date" wire:model.live="searchDate" class="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-blue-500 focus:border-blue-500">
+                </div>
+            </div>
+
             <div style="overflow-x: auto;">
                 <table class="modern-table">
                     <thead>
@@ -126,10 +143,18 @@
                                 {{ $payslip->original_filename }}
                             </td>
                             <td>
-                                @if($payslip->signature)
-                                    <span class="badge badge-success"><i class="ri-checkbox-circle-line"></i> Firmado</span>
+                                @if($payslip->status === 'signed_conforme')
+                                    <span class="px-2 py-1 bg-emerald-500/20 text-emerald-400 text-xs rounded-full border border-emerald-500/30 font-medium inline-flex items-center">
+                                        <i class="ri-shield-check-fill mr-1"></i> Conforme
+                                    </span>
+                                @elseif($payslip->status === 'signed_no_conforme')
+                                    <span class="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded-full border border-red-500/30 font-medium inline-flex items-center">
+                                        <i class="ri-error-warning-fill mr-1"></i> No Conforme
+                                    </span>
                                 @else
-                                    <span class="badge badge-pending"><i class="ri-time-line"></i> Pendiente</span>
+                                    <span class="px-2 py-1 bg-yellow-500/20 text-yellow-500 text-xs rounded-full border border-yellow-500/30 font-medium inline-flex items-center">
+                                        <i class="ri-time-line mr-1"></i> Pendiente
+                                    </span>
                                 @endif
                             </td>
                             <td>
@@ -150,7 +175,7 @@
                         @empty
                         <tr>
                             <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 3rem;">
-                                No hay recibos válidos en este lote.
+                                No se encontraron recibos que coincidan con los filtros aplicados.
                             </td>
                         </tr>
                         @endforelse

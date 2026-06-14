@@ -79,8 +79,9 @@ class CompanyCertificateGenerator
         $rootKey  = file_get_contents($rootKeyPath);
 
         // ── 4. Firmar el certificado usando el Root CA — 5 años = 1825 días ───
-        $x509 = openssl_csr_sign($csr, $rootCert, $rootKey, 1825, ['digest_alg' => 'sha256']);
-
+        $serialNumber = time();
+        $x509 = openssl_csr_sign($csr, $rootCert, $rootKey, 1825, ['digest_alg' => 'sha256'], $serialNumber);
+        
         if ($x509 === false) {
             throw new RuntimeException('No se pudo firmar el certificado X.509 con el Root CA.');
         }

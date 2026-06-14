@@ -21,7 +21,7 @@ class EmployeeCertificateGenerator
      *
      * @return array{pfx_path: string, pfx_password: string, expires_at: string}
      */
-    public function generate(string $employeeName, string $cuil, string $companyName, int $employeeId): array
+    public function generate(string $employeeName, string $cuil, string $companyName, int $employeeId, string $email): array
     {
         // ── 1. Par de claves RSA 2048-bit ─────────────────────────────────────
         $privkey = openssl_pkey_new([
@@ -41,9 +41,9 @@ class EmployeeCertificateGenerator
             'countryName'            => 'AR',
             'stateOrProvinceName'    => 'Mendoza',
             'localityName'           => 'Mendoza',
-            'organizationName'       => $companyName,
-            'organizationalUnitName' => $cuil,
-            'commonName'             => $employeeName,
+            'organizationName'       => 'bonosweb.com.ar',//$companyName,
+            'emailAddress'           => $email,
+            'commonName'             => $employeeName . ' - ' . $cuil,
         ];
 
         // ── 3. CSR (Certificate Signing Request) ──────────────────────────────
@@ -65,7 +65,8 @@ class EmployeeCertificateGenerator
         $rootKey  = file_get_contents($rootKeyPath);
 
         // ── 4. Firmar el certificado usando el Root CA — 5 años = 1825 días ───
-        $x509 = openssl_csr_sign($csr, $rootCert, $rootKey, 1825, ['digest_alg' => 'sha256']);
+        $serialNumber = time() + rand(1, 1000); // To avoid exact duplicate if generated at the same second
+        $x509 = openssl_csr_sign($csr, $rootCert, $rootKey, 1825, ['digest_alg' => 'sha256'], $serialNumber);
 
         if ($x509 === false) {
             throw new RuntimeException('No se pudo firmar el certificado X.509 con el Root CA.');
@@ -75,7 +76,7 @@ class EmployeeCertificateGenerator
         $plainPassword = bin2hex(random_bytes(16));
 
         // ── 6. Empaquetar cert + clave privada en PKCS#12 (.pfx) ─────────────
-        $ok = openssl_pkcs12_export($x509, $pfxContent, $privkey, $plainPassword, ['extracerts' => $rootCert]);
+        $ok = openssl_pkcs12_export($x509, $pfxContent, $privkey, $plainPassword);
 
         if (! $ok || empty($pfxContent)) {
             throw new RuntimeException(

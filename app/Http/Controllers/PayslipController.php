@@ -82,13 +82,13 @@ class PayslipController extends Controller
                     'Reason'      => 'Certificación del reporte de auditoría de conformidad',
                     'ContactInfo' => 'rrhh@' . $domain,
                 ];
-                // cert_type=2: documento certificado, ninguna modificación permitida
+                // cert_type=3: documento certificado, modificaciones de formularios y firmas permitidas
                 $pdf->setSignature(
                     'file://' . $crtAbsPath,
                     'file://' . $keyAbsPath,
                     '',        // contraseña de la clave privada (vacía, sin protección)
                     '',        // cadena de certificados intermedios (no aplica)
-                    2,
+                    3,
                     $signInfo
                 );
                 $signatureApplied = true;
@@ -124,7 +124,9 @@ class PayslipController extends Controller
         foreach ($payslips as $p) {
             $period = $p->period_year . '-' . str_pad($p->period_month, 2, '0', STR_PAD_LEFT);
             $type   = ucfirst($p->liquidation_type);
-            $status = $p->signature ? 'Firmado' : 'Pendiente';
+            $status = 'Pendiente';
+            if ($p->status === 'signed_conforme') $status = 'Conforme';
+            elseif ($p->status === 'signed_no_conforme') $status = 'No Conforme';
             $date   = $p->signature ? $p->signature->signed_at->format('d/m/Y H:i') : '-';
             $ip     = $p->signature ? htmlspecialchars($p->signature->ip_address) : '-';
 
@@ -148,5 +150,124 @@ class PayslipController extends Controller
 
         // ── 4. Output ─────────────────────────────────────────────────────
         $pdf->Output('Auditoria_' . ($employee->currentCompanyProfile->cuil ?? $id) . '.pdf', 'I');
+    }
+
+    public function signCryptographically($payslip, $employee, $signatureType, $disagreementReasonId = null)
+    {
+        $profile = \App\Models\EmployeeProfile::withoutGlobalScope(\App\Models\Scopes\CurrentCompanyScope::class)
+            ->where('user_id', $employee->id)
+            ->where('company_id', $payslip->company_id)
+            ->first();
+
+        if (!$profile || !$profile->certificate_path) {
+            throw new \Exception('No se encontró el certificado digital del empleado.');
+        }
+
+        $certAbsPath = Storage::disk('local')->path($profile->certificate_path);
+        
+        if (!file_exists($certAbsPath)) {
+            throw new \Exception('El archivo del certificado no existe en el servidor.');
+        }
+
+        if ($signatureType === 'conforme') {
+            $reasonText = 'FIRMADO CONFORME';
+        } else {
+            $reasonModel = \App\Models\DisagreementReason::find($disagreementReasonId);
+            $reasonText = 'NO CONFORME: ' . ($reasonModel ? $reasonModel->reason_text : 'Motivo no especificado');
+        }
+
+        $originalPath = Storage::disk('local')->path($payslip->file_path);
+        
+        $signInfo = [
+            'Name'        => $employee->name,
+            'Location'    => 'Portal del Empleado (BonosWeb)',
+            'Reason'      => $reasonText,
+        ];
+
+        $plainPassword = \Illuminate\Support\Facades\Crypt::decrypt($profile->certificate_password);
+        
+        // Crear un archivo temporal para el output
+        $tempOutput = tempnam(sys_get_temp_dir(), 'signed_pdf_');
+        
+        // Ruta al script de python
+        $scriptPath = base_path('storage/scripts/sign_pdf.py');
+        
+        $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+        $pythonBin = $isWindows ? 'python' : 'python3';
+        
+        $env = $_SERVER;
+        $env['PATH'] = getenv('PATH');
+        if ($isWindows && empty($env['SystemRoot'])) {
+            $env['SystemRoot'] = getenv('SystemRoot') ?: 'C:\\Windows';
+        }
+
+        // Ejecutar el script
+        $process = new \Symfony\Component\Process\Process(
+            [
+                $pythonBin,
+                $scriptPath,
+                '--in', $originalPath,
+                '--out', $tempOutput,
+                '--pfx', $certAbsPath,
+                '--pwd', $plainPassword,
+                '--reason', $signInfo['Reason'],
+                '--location', $signInfo['Location'],
+                '--name', $signInfo['Name']
+            ],
+            null,
+            $env
+        );
+        
+        $process->run();
+        
+        if (!$process->isSuccessful()) {
+            @unlink($tempOutput);
+            throw new \Exception('Error ejecutando pyHanko: ' . $process->getErrorOutput() . ' | STDOUT: ' . $process->getOutput());
+        }
+        
+        $output = $process->getOutput();
+        if (strpos($output, 'SUCCESS') === false) {
+            @unlink($tempOutput);
+            throw new \Exception('Error en pyHanko al firmar: ' . $output);
+        }
+        
+        // Reemplazar el archivo original con el firmado incrementalmente
+        if (!rename($tempOutput, $originalPath)) {
+            // Fallback: copy and unlink if cross-device rename fails (e.g. from C:\tmp to C:\laragon)
+            copy($tempOutput, $originalPath);
+            @unlink($tempOutput);
+        }
+    }
+
+    public function downloadAllZip($id)
+    {
+        $payslips = Payslip::where('employee_id', $id)->where('is_rectified', false)->get();
+
+        if ($payslips->isEmpty()) {
+            return back()->with('error', 'El empleado no tiene recibos válidos para descargar.');
+        }
+
+        $employee = User::with('currentCompanyProfile')->findOrFail($id);
+        $cuil = $employee->currentCompanyProfile->cuil ?? $id;
+
+        $tempFile = tempnam(sys_get_temp_dir(), 'zip');
+        $zip = new \ZipArchive();
+
+        if ($zip->open($tempFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
+            foreach ($payslips as $payslip) {
+                $absolutePath = Storage::disk('local')->path($payslip->file_path);
+                
+                if (file_exists($absolutePath)) {
+                    $year = str_pad($payslip->period_year, 4, '0', STR_PAD_LEFT);
+                    $month = str_pad($payslip->period_month, 2, '0', STR_PAD_LEFT);
+                    $filenameInZip = "{$year}_{$month}_{$cuil}_{$payslip->original_filename}";
+                    
+                    $zip->addFile($absolutePath, $filenameInZip);
+                }
+            }
+            $zip->close();
+        }
+
+        return response()->download($tempFile, "recibos_{$cuil}.zip")->deleteFileAfterSend(true);
     }
 }

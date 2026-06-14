@@ -56,7 +56,8 @@ class GenerateEmployeeCertificate implements ShouldQueue
                 $user->name,
                 $profile->cuil ?: ($profile->document_number ?: 'SIN_CUIL'),
                 $company->name,
-                $profile->id
+                $profile->id,
+                $user->email
             );
 
             // Actualizamos la base de datos
