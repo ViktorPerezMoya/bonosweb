@@ -130,6 +130,7 @@
                             <th>Estado de Firma</th>
                             <th>Fecha y Hora</th>
                             <th>IP Dispositivo</th>
+                            <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -144,16 +145,16 @@
                             </td>
                             <td>
                                 @if($payslip->status === 'signed_conforme')
-                                    <span class="px-2 py-1 bg-emerald-500/20 text-emerald-400 text-xs rounded-full border border-emerald-500/30 font-medium inline-flex items-center">
-                                        <i class="ri-shield-check-fill mr-1"></i> Conforme
+                                    <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: var(--success);">
+                                        <i class="ri-check-shield-line"></i> Firmado
                                     </span>
                                 @elseif($payslip->status === 'signed_no_conforme')
-                                    <span class="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded-full border border-red-500/30 font-medium inline-flex items-center">
-                                        <i class="ri-error-warning-fill mr-1"></i> No Conforme
+                                    <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: var(--danger);">
+                                        <i class="ri-error-warning-line"></i> Firmado No Conforme
                                     </span>
                                 @else
-                                    <span class="px-2 py-1 bg-yellow-500/20 text-yellow-500 text-xs rounded-full border border-yellow-500/30 font-medium inline-flex items-center">
-                                        <i class="ri-time-line mr-1"></i> Pendiente
+                                    <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: var(--warning);">
+                                        <i class="ri-time-line"></i> Pendiente
                                     </span>
                                 @endif
                             </td>
@@ -171,10 +172,19 @@
                                     <span style="color: var(--text-secondary);">-</span>
                                 @endif
                             </td>
+                            <td>
+                                @if($payslip->signature)
+                                    <button wire:click="showSignatureDetails({{ $payslip->id }})" class="btn" style="background: rgba(59, 130, 246, 0.1); color: var(--accent); padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+                                        <i class="ri-eye-line" style="margin-right: 5px;"></i> Ver
+                                    </button>
+                                @else
+                                    <span style="color: var(--text-secondary);">-</span>
+                                @endif
+                            </td>
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 3rem;">
+                            <td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 3rem;">
                                 No se encontraron recibos que coincidan con los filtros aplicados.
                             </td>
                         </tr>
@@ -187,5 +197,77 @@
                 {{ $payslips->links() }}
             </div>
         </div>
+    @endif
+
+    <!-- Signature Details Modal -->
+    @if($showSignatureModal && $selectedSignature)
+    <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <div class="glass-panel" style="width: 100%; max-width: 600px; background: var(--bg-secondary); border: 1px solid var(--glass-border); border-radius: var(--radius-lg); padding: 2rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 1rem;">
+                <h3 style="margin: 0; color: white; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="ri-file-shield-2-line" style="color: var(--accent);"></i>
+                    Detalles de Auditoría de Firma
+                </h3>
+                <button wire:click="closeSignatureModal" style="background: none; border: none; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer; transition: color 0.3s;" onmouseover="this.style.color='white'" onmouseout="this.style.color='var(--text-secondary)'">
+                    <i class="ri-close-line"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Empleado</p>
+                        <p style="font-weight: 500;">{{ $selectedSignature->payslip->employee->name ?? 'N/A' }}</p>
+                    </div>
+                    <div>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Recibo</p>
+                        <p style="font-weight: 500;">{{ $selectedSignature->payslip->original_filename }}</p>
+                    </div>
+                    <div>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Fecha y Hora</p>
+                        <p style="font-weight: 500;">{{ $selectedSignature->signed_at->format('d/m/Y H:i:s') }}</p>
+                    </div>
+                    <div>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Estado</p>
+                        @if($selectedSignature->status === 'signed_conforme')
+                            <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: var(--success);"><i class="ri-check-shield-line"></i> Firmado Conforme</span>
+                        @else
+                            <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: var(--danger);"><i class="ri-error-warning-line"></i> Firmado No Conforme</span>
+                        @endif
+                    </div>
+                </div>
+
+                <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--glass-border); margin-top: 1rem;">
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;"><i class="ri-global-line"></i> Dispositivo e IP</p>
+                    <p style="font-family: monospace; font-size: 0.9rem; color: var(--text-primary); margin-bottom: 0.5rem; word-break: break-all;">
+                        IP: <span style="color: var(--accent);">{{ $selectedSignature->ip_address }}</span>
+                    </p>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); word-break: break-all;">
+                        {{ $selectedSignature->device_info }}
+                    </p>
+                </div>
+
+                <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--glass-border);">
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;"><i class="ri-fingerprint-line"></i> Hash PDF</p>
+                    <p style="font-family: monospace; font-size: 0.85rem; color: var(--warning); word-break: break-all; margin: 0;">
+                        {{ $selectedSignature->pdf_hash }}
+                    </p>
+                </div>
+
+                @if($selectedSignature->status === 'signed_no_conforme' && $selectedSignature->disconformity_reason)
+                <div style="background: rgba(239, 68, 68, 0.1); padding: 1rem; border-radius: var(--radius-md); border: 1px solid rgba(239, 68, 68, 0.2);">
+                    <p style="font-size: 0.8rem; color: var(--danger); margin-bottom: 0.5rem;"><i class="ri-message-3-line"></i> Motivo de Disconformidad</p>
+                    <p style="font-size: 0.9rem; margin: 0; color: white;">
+                        {{ $selectedSignature->disconformity_reason }}
+                    </p>
+                </div>
+                @endif
+            </div>
+
+            <div style="margin-top: 2rem; display: flex; justify-content: flex-end;">
+                <button wire:click="closeSignatureModal" class="btn" style="background: rgba(255,255,255,0.1); color: white;">Cerrar</button>
+            </div>
+        </div>
+    </div>
     @endif
 </div>

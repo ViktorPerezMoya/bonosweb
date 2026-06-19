@@ -22,7 +22,7 @@
         <form wire:submit.prevent="addReason" class="flex gap-4 items-start">
             <div class="flex-1">
                 <input type="text" wire:model.defer="newReason" 
-                       class="form-input w-full bg-slate-800/50 border border-slate-700 rounded text-white" 
+                       class="form-input w-full h-10 mt-2 bg-slate-800/50 border border-slate-700 rounded text-white" 
                        placeholder="Ej. Diferencia en liquidación">
                 @error('newReason') <span class="text-red-400 text-xs mt-1 block">{{ $message }}</span> @enderror
             </div>

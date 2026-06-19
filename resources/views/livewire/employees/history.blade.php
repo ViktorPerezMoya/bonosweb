@@ -70,9 +70,15 @@
                         </td>
                         <td>
                             @if(in_array($payslip->status, ['signed_conforme', 'signed_no_conforme']) || $payslip->signature)
-                                <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: var(--success);">
-                                    <i class="ri-check-shield-line"></i> Firmado
-                                </span>
+                                @if($payslip->status == 'signed_conforme')
+                                    <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: var(--success);">
+                                        <i class="ri-check-shield-line"></i> Firmado Conforme
+                                    </span>
+                                @else
+                                    <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: var(--danger);">
+                                        <i class="ri-error-warning-line"></i> Firmado No Conforme
+                                    </span>
+                                @endif
                             @else
                                 <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: var(--warning);">
                                     <i class="ri-time-line"></i> Pendiente

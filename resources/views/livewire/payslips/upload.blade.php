@@ -84,7 +84,7 @@
                             <i class="ri-settings-4-line" style="margin-right: 5px;"></i> Procesar Archivo
                         </span>
                         <span wire:loading wire:target="save">
-                            Iniciando proceso...
+                            <i class="ri-loader-4-line" style="animation: spin 0.8s linear infinite; display: inline-block;"></i> Analizando y normalizando documento...
                         </span>
                     </button>
                 </div>

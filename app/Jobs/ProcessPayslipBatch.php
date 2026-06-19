@@ -172,6 +172,12 @@ class ProcessPayslipBatch implements ShouldQueue
         $errors       = [];
         $processed    = 0;
 
+        $cuilMap = [];
+        $pageAnchors = [];
+        
+        $lastCuil = null;
+        $lastProfile = null;
+
         for ($pageNo = 1; $pageNo <= $pageCount; $pageNo++) {
             try {
                 $pageText = $pages[$pageNo - 1]->getText();
@@ -181,42 +187,80 @@ class ProcessPayslipBatch implements ShouldQueue
                     $anchored = app(PdfCoordinateExtractor::class)
                         ->findCoordinatesInPage($pages[$pageNo - 1], $this->sigConfig['anchor_text']);
                 }
+                $pageAnchors[$pageNo] = $anchored;
 
-                // Liberar el objeto Page de memoria tan pronto como sea posible.
-                // En PDFs masivos de cientos de páginas esto evita agotar la RAM del worker.
                 unset($pages[$pageNo - 1]);
 
                 [$cuil, $rawCuil] = $this->extractEmployeeCuil($pageText, $employerCuit);
+                $profile = null;
 
-                if (!$cuil) {
-                    $errors[] = "Pagina {$pageNo}: no se encontro CUIL de empleado.";
-                    continue;
+                if ($cuil) {
+                    $profile = $this->findEmployeeProfile($cuil, $rawCuil);
                 }
 
-                $profile = $this->findEmployeeProfile($cuil, $rawCuil);
-
-                if (!$profile) {
-                    $errors[] = "Pagina {$pageNo}: CUIL {$cuil} no encontrado en la BD.";
-                    continue;
+                if (!$cuil || !$profile) {
+                    if ($lastCuil && $lastProfile) {
+                        $cuil = $lastCuil;
+                        $profile = $lastProfile;
+                        // Agrupado por continuidad (hereda el empleado de la página anterior)
+                    } else {
+                        $errors[] = "Pagina {$pageNo}: no se encontro CUIL de empleado y no hay empleado previo.";
+                        continue;
+                    }
+                } else {
+                    $lastCuil = $cuil;
+                    $lastProfile = $profile;
                 }
 
-                $pagePath = $this->extractSinglePage($fullPdfPath, $pageNo, $extractDir);
-
-                if (!$pagePath) {
-                    $errors[] = "Pagina {$pageNo}: no se pudo extraer como archivo independiente. "
-                        . "Verifique que el PDF no use streams comprimidos (PDF 1.5+).";
-                    continue;
+                if (!isset($cuilMap[$cuil])) {
+                    $cuilMap[$cuil] = [
+                        'profile' => $profile,
+                        'pages'   => []
+                    ];
                 }
-
-                $absolutePagePath = Storage::disk('local')->path($pagePath);
-                $originalName     = 'pagina_' . str_pad($pageNo, 4, '0', STR_PAD_LEFT) . '.pdf';
-
-                $processed += (int) $this->persistPayslip($profile, $absolutePagePath, $originalName, $anchored);
-
-                Storage::disk('local')->delete($pagePath);
+                $cuilMap[$cuil]['pages'][] = $pageNo;
 
             } catch (Exception $e) {
                 $errors[] = "Pagina {$pageNo}: error critico - " . $e->getMessage();
+            }
+        }
+
+        foreach ($cuilMap as $cuil => $data) {
+            $profile = $data['profile'];
+            $cuilPages = $data['pages'];
+            
+            try {
+                $fpdi = new CustomFpdi();
+                $fpdi->setSourceFile($fullPdfPath);
+
+                foreach ($cuilPages as $pNo) {
+                    $templateId = $fpdi->importPage($pNo);
+                    $size       = $fpdi->getTemplateSize($templateId);
+                    $fpdi->AddPage(
+                        $size['orientation'] ?? 'P',
+                        [$size['width'], $size['height']]
+                    );
+                    $fpdi->useTemplate($templateId);
+                }
+
+                $relativePath = $extractDir . '/cuil_' . $cuil . '_' . uniqid() . '.pdf';
+                $absolutePagePath = Storage::disk('local')->path($relativePath);
+                $fpdi->Output($absolutePagePath, 'F');
+                unset($fpdi);
+
+                $groupedAnchors = [];
+                foreach ($cuilPages as $idx => $pNo) {
+                    $groupedAnchors[$idx + 1] = $pageAnchors[$pNo];
+                }
+
+                $originalName = 'recibo_' . $cuil . '.pdf';
+
+                $processed += (int) $this->persistPayslip($profile, $absolutePagePath, $originalName, $groupedAnchors);
+
+                Storage::disk('local')->delete($relativePath);
+
+            } catch (Exception $e) {
+                $errors[] = "Error procesando CUIL {$cuil}: " . $e->getMessage();
             }
 
             if ($processed % 10 === 0 && $processed > 0) {
@@ -312,10 +356,10 @@ class ProcessPayslipBatch implements ShouldQueue
      * Calcula SHA-256, copia el archivo a su ruta final e inserta el Payslip.
      * Aplica rectificativa inmutable: el recibo previo se marca, no se borra.
      */
-    protected function persistPayslip(EmployeeProfile $profile, string $absoluteSrcPath, string $originalName, ?array $anchored = null): bool
+    protected function persistPayslip(EmployeeProfile $profile, string $absoluteSrcPath, string $originalName, ?array $anchoreds = null): bool
     {
         // Estampar firma visual del empleador (si está configurada).
-        $finalContent = $this->stampedPdfContent($absoluteSrcPath, $anchored);
+        $finalContent = $this->stampedPdfContent($absoluteSrcPath, $anchoreds);
         $fileHash     = hash('sha256', $finalContent);   // hash del archivo FINAL
         $periodYear   = $this->batch->period_year;
         $periodMonth  = str_pad($this->batch->period_month, 2, '0', STR_PAD_LEFT);
@@ -409,6 +453,7 @@ class ProcessPayslipBatch implements ShouldQueue
             'page_h'          => (float) ($company->signature_page_h ?? 297.0),
             'anchor_text'     => $company->signature_anchor_text,
             'anchor_offset_y' => (float) ($company->signature_anchor_offset_y ?? 10.0),
+            'page_placement'  => $company->signature_page_placement ?? 'all',
             'image_path'      => $company->signature_image_path,
             'cert_info'   => [
                 'Name'        => $company->name,
@@ -462,7 +507,7 @@ class ProcessPayslipBatch implements ShouldQueue
      * Si la firma no está configurada o FPDI no soporta el PDF (compressed
      * streams / PDF 1.5+), retorna el PDF original sin modificaciones.
      */
-    protected function stampedPdfContent(string $srcPath, ?array $anchored = null): string
+    protected function stampedPdfContent(string $srcPath, ?array $anchoreds = null): string
     {
         if (!$this->sigConfig) {
             return file_get_contents($srcPath);
@@ -473,82 +518,15 @@ class ProcessPayslipBatch implements ShouldQueue
         try {
             $fpdi = new CustomFpdi();
             $fpdi->SetAutoPageBreak(false);
-            $fpdi->setSourceFile($srcPath);
+            $pageCount = $fpdi->setSourceFile($srcPath);
 
-            $templateId = $fpdi->importPage(1);
-            $size       = $fpdi->getTemplateSize($templateId);
-
-            $fpdi->AddPage(
-                $size['orientation'] ?? 'P',
-                [$size['width'], $size['height']]
-            );
-            $fpdi->useTemplate($templateId);
-
-            // ── Escalar coordenadas al tamaño real de la página ────────────────
-            // Usa las dimensiones de referencia con las que se configuró la
-            // firma (detección automática al subir el PDF de muestra).
-            $refW = $cfg['page_w'] ?: 210.0;
-            $refH = $cfg['page_h'] ?: 297.0;
-            $scaleX = $size['width']  / $refW;
-            $scaleY = $size['height'] / $refH;
-
-            // ── Coordenadas base (estáticas configuradas en la Company) ──────────
-            // Según requerimiento, asumimos que ya vienen en milímetros desde la BD
-            // y no deben invertirse ni convertirse de nuevo.
+            $placement = $cfg['page_placement'] ?? 'all';
             $sigX = $cfg['x'];
             $sigY = $cfg['y'];
             $sigW = $cfg['w'];
             $sigH = $cfg['h'];
 
-            $methodUsed = 'Fallback';
-
-            // ── Anclaje dinámico: override de X/Y si se encontró el texto ancla ──
-            if (!empty($cfg['anchor_text'])) {
-                if ($anchored !== null) {
-                    $methodUsed = 'TextAnchor';
-                    
-                    $pageHeightMm   = $size['height'];
-                    
-                    $offsetY = $cfg['anchor_offset_y'] ?? 10.0;
-                    $sigY = $pageHeightMm - $anchored['y_mm_from_bottom'] - $sigH - $offsetY;
-
-                    if ($anchored['x_mm'] > 5.0) {
-                        $sigX = $anchored['x_mm'] + 15 - ($sigW / 2);
-                    }
-                    Log::debug('ProcessPayslipBatch: firma posicionada por ancla de texto.', [
-                        'archivo' => basename($srcPath),
-                        'anchor'  => $cfg['anchor_text'],
-                        'y_mm_from_bottom' => $anchored['y_mm_from_bottom'],
-                        'offset_y' => $offsetY,
-                        'x_mm'    => round($sigX, 2),
-                        'y_mm'    => round($sigY, 2),
-                        'w_mm'    => round($sigW, 2),
-                        'h_mm'    => round($sigH, 2),
-                    ]);
-                } else {
-                    Log::warning('ProcessPayslipBatch: el texto ancla no se encontro en la pagina o error al procesar original.', [
-                        'archivo' => basename($srcPath),
-                        'anchor'  => $cfg['anchor_text'],
-                    ]);
-                }
-            }
-            // ── Telemetría y Logging (Crucial para el debug) ──────────────────────
-            Log::channel('single')->debug('ProcessPayslipBatch: Coordenadas Inyectadas', [
-                'pageNo'      => 1, // srcPath es de una única página
-                'orientation' => $size['orientation'] ?? 'P',
-                'width_mm'    => round($size['width'], 2),
-                'height_mm'   => round($size['height'], 2),
-                'method'      => $methodUsed,
-                'anchor_text' => $cfg['anchor_text'],
-                'final_x_mm'  => round($sigX, 2),
-                'final_y_mm'  => round($sigY, 2),
-                'final_w_mm'  => round($sigW, 2),
-                'final_h_mm'  => round($sigH, 2),
-            ]);
-
             // ── Firma criptográfica digital (X.509, PKCS#7 detached) ────────────
-            // Usa cert y key en formato PEM extraídos en memoria del PFX.
-            // cert_type=2: fill+sign — el empleado puede firmar después.
             if (!empty($cfg['cert_pem']) && !empty($cfg['key_pem'])) {
                 $fpdi->setSignature(
                     $cfg['cert_pem'],
@@ -561,18 +539,55 @@ class ProcessPayslipBatch implements ShouldQueue
                 );
             }
 
-            // ── Widget de firma visible en coordenadas resueltas ─────────────────
-            // $sigX/$sigY ya incorporan el override del texto ancla (si aplica).
-            // En caso de fallo del extractor, contienen las coords estáticas.
-            $fpdi->setSignatureAppearance($sigX, $sigY, $sigW, $sigH);
+            for ($i = 1; $i <= $pageCount; $i++) {
+                $templateId = $fpdi->importPage($i);
+                $size       = $fpdi->getTemplateSize($templateId);
 
-            // ── Inyectar imagen visual de la firma (PNG/JPG) ─────────────────────
-            // Para que la firma sea visible en navegadores (Chrome, Edge, móviles)
-            if (!empty($cfg['image_path'])) {
-                $imageAbsPath = Storage::disk('local')->path($cfg['image_path']);
-                if (file_exists($imageAbsPath)) {
-                    // TCPDF Image() dibuja directamente sobre el lienzo actual
-                    $fpdi->Image($imageAbsPath, $sigX, $sigY, $sigW, $sigH);
+                $fpdi->AddPage(
+                    $size['orientation'] ?? 'P',
+                    [$size['width'], $size['height']]
+                );
+                $fpdi->useTemplate($templateId);
+
+                $shouldStamp = false;
+                if ($placement === 'all') { $shouldStamp = true; }
+                elseif ($placement === 'first' && $i === 1) { $shouldStamp = true; }
+                elseif ($placement === 'last' && $i === $pageCount) { $shouldStamp = true; }
+
+                if ($shouldStamp) {
+                    $pageSigX = $sigX;
+                    $pageSigY = $sigY;
+                    $methodUsed = 'Fallback';
+
+                    // ── Anclaje dinámico: override de X/Y si se encontró el texto ancla ──
+                    if (!empty($cfg['anchor_text'])) {
+                        // El array $anchoreds puede venir indexado por página (1-based) o un solo elemento
+                        $anchored = $anchoreds[$i] ?? (isset($anchoreds['x_mm']) ? $anchoreds : null);
+
+                        if ($anchored !== null) {
+                            $methodUsed = 'TextAnchor';
+                            $pageHeightMm   = $size['height'];
+                            $offsetY = $cfg['anchor_offset_y'] ?? 10.0;
+                            $pageSigY = $pageHeightMm - $anchored['y_mm_from_bottom'] - $sigH - $offsetY;
+
+                            if ($anchored['x_mm'] > 5.0) {
+                                $pageSigX = $anchored['x_mm'] + 15 - ($sigW / 2);
+                            }
+                        }
+                    }
+
+                    // ── Inyectar imagen visual de la firma (PNG/JPG) ─────────────────────
+                    if (!empty($cfg['image_path'])) {
+                        $imageAbsPath = Storage::disk('local')->path($cfg['image_path']);
+                        if (file_exists($imageAbsPath)) {
+                            $fpdi->Image($imageAbsPath, $pageSigX, $pageSigY, $sigW, $sigH);
+                        }
+                    }
+
+                    // Registrar coordenadas para la primera página donde estampe
+                    if ($shouldStamp && ($i === 1 || $placement === 'last')) {
+                        $fpdi->setSignatureAppearance($pageSigX, $pageSigY, $sigW, $sigH);
+                    }
                 }
             }
 

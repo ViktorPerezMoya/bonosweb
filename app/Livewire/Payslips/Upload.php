@@ -57,6 +57,34 @@ class Upload extends Component
 
             // Empresa activa en la sesión del usuario de RRHH
             $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
+            $company = \App\Models\Company::find($companyId);
+            $rotationAngle = $company->pdf_rotation ?? 0;
+
+            // Normalizar orientación si es un PDF individual/sábana
+            if ($fileType === 'pdf') {
+                $absolutePath = Storage::disk('local')->path($path);
+                $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+                $pythonBin = $isWindows ? 'python' : 'python3';
+                $scriptPath = base_path('storage/scripts/normalize_rotation.py');
+                
+                $env = $isWindows ? [
+                    'SystemRoot' => getenv('SystemRoot') ?: 'C:\\Windows', 
+                    'PATH' => getenv('PATH')
+                ] : null;
+
+                $process = new \Symfony\Component\Process\Process(
+                    [$pythonBin, $scriptPath, $absolutePath, $absolutePath, $rotationAngle],
+                    null,
+                    $env
+                );
+                
+                $process->run();
+                
+                if (!$process->isSuccessful()) {
+                    \Illuminate\Support\Facades\Log::error("Error normalizando rotación del PDF: " . $process->getErrorOutput());
+                    throw new \Exception('Ocurrió un error al normalizar la orientación del documento.');
+                }
+            }
 
             // 2. Crear el registro del Batch en la Base de Datos
             $batch = UploadBatch::create([

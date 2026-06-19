@@ -16,6 +16,9 @@ class SignaturesTracking extends Component
     public $searchStatus = '';
     public $searchDate = '';
 
+    public $selectedSignature = null;
+    public $showSignatureModal = false;
+
     public function updatedSelectedBatchId()
     {
         $this->resetPage();
@@ -34,6 +37,22 @@ class SignaturesTracking extends Component
     public function updatingSearchDate()
     {
         $this->resetPage();
+    }
+
+    public function showSignatureDetails($payslipId)
+    {
+        $payslip = Payslip::with('signature')->find($payslipId);
+        if ($payslip && $payslip->signature) {
+            $this->selectedSignature = clone $payslip->signature;
+            $this->selectedSignature->payslip = $payslip;
+            $this->showSignatureModal = true;
+        }
+    }
+
+    public function closeSignatureModal()
+    {
+        $this->showSignatureModal = false;
+        $this->selectedSignature = null;
     }
 
     public function render()

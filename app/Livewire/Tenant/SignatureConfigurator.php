@@ -37,9 +37,13 @@ class SignatureConfigurator extends Component
     // ── Indica si el tenant ya ha arrastrado y guardado coordenadas ───────────
     public bool $sigConfigured = false;
 
-    // ── Texto ancla para posicionamiento dinámico ─────────────────────────────
+    // ── Texto ancla y Rotación para posicionamiento dinámico ──────────────────
     public string $anchorText = '';
     public float $anchorOffsetY = 10.0;
+    public int $pdf_rotation = 0;
+    public int $previewVersion = 1;
+
+    public $signature_page_placement = 'all';
 
     // ── Dimensiones reales de la página (mm) ─────────────────────────────────
     // Detectadas al subir el PDF de muestra; defecto A4 portrait.
@@ -54,12 +58,38 @@ class SignatureConfigurator extends Component
     protected function rules(): array
     {
         return [
-            'samplePdf'      => 'required|file|mimes:pdf|max:20480',
+            'samplePdf'      => 'required|file|mimes:pdf|max:51200',
             'signatureImage' => 'required|file|mimes:png,jpg,jpeg|max:5120',
+            'pdf_rotation'   => 'integer|in:0,90,270',
+            'signature_page_placement' => 'in:all,first,last',
         ];
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+
+    public function updatedSignaturePagePlacement($value)
+    {
+        $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
+        $company   = Company::find($companyId);
+        $company->signature_page_placement = $value;
+        $company->save();
+
+        session()->flash('message', 'Ubicación de firma guardada correctamente.');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public function updatedPdfRotation($value): void
+    {
+        $this->validateOnly('pdf_rotation');
+        $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
+        $company = Company::find($companyId);
+        if ($company) {
+            $company->pdf_rotation = (int) $value;
+            $company->save();
+            $this->generateRotatedPreview();
+        }
+    }
 
     public function mount(): void
     {
@@ -80,6 +110,8 @@ class SignatureConfigurator extends Component
 
         $this->anchorText = $company->signature_anchor_text ?? '';
         $this->anchorOffsetY = $company->signature_anchor_offset_y ?? 10.0;
+        $this->pdf_rotation = $company->pdf_rotation ?? 0;
+        $this->signature_page_placement = $company->signature_page_placement ?? 'all';
 
         // Cargar dimensiones de página guardadas (fallback: A4 portrait)
         $this->pageWmm = $company->signature_page_w ? (float) $company->signature_page_w : 210.0;
@@ -103,49 +135,100 @@ class SignatureConfigurator extends Component
             Storage::disk('local')->makeDirectory('signatures');
 
             $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
-            $company = Company::find($companyId);
+            $originalRelPath = "signatures/company_{$companyId}_sample_original.pdf";
 
-            $pdfRelPath = "signatures/company_{$companyId}_sample_preview.pdf";
-
-            if (Storage::disk('local')->exists($pdfRelPath)) {
-                Storage::disk('local')->delete($pdfRelPath);
+            if (Storage::disk('local')->exists($originalRelPath)) {
+                Storage::disk('local')->delete($originalRelPath);
             }
 
-            $this->samplePdf->storeAs('signatures', "company_{$companyId}_sample_preview.pdf", 'local');
+            $this->samplePdf->storeAs('signatures', "company_{$companyId}_sample_original.pdf", 'local');
 
-            $company->signature_preview_path = $pdfRelPath;
-
-            // ── Detectar orientación/dimensiones de página con FPDI ──────────
-            try {
-                $pdfAbsPath = Storage::disk('local')->path($pdfRelPath);
-                $fpdi = new Fpdi();
-                $fpdi->setSourceFile($pdfAbsPath);
-                $tplId = $fpdi->importPage(1);
-                $size  = $fpdi->getTemplateSize($tplId);
-                unset($fpdi);
-
-                $pageW = round((float) $size['width'],  2);
-                $pageH = round((float) $size['height'], 2);
-
-                $company->signature_page_w = $pageW;
-                $company->signature_page_h = $pageH;
-
-                $this->pageWmm = $pageW;
-                $this->pageHmm = $pageH;
-            } catch (\Throwable) {
-                // Si FPDI no puede leer el PDF, conservar las dimensiones previas.
-            }
-
-            $company->save();
-
-            $this->previewAvailable = true;
-            $this->dispatch('preview-ready', pageW: $this->pageWmm, pageH: $this->pageHmm);
+            $this->generateRotatedPreview();
 
         } catch (\Exception $e) {
             $this->uploadError = 'Error al guardar el PDF: ' . $e->getMessage();
         }
 
         $this->reset('samplePdf');
+    }
+
+    private function generateRotatedPreview(): void
+    {
+        $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
+        $company = Company::find($companyId);
+        if (!$company) return;
+
+        $originalRelPath = "signatures/company_{$companyId}_sample_original.pdf";
+        if (!Storage::disk('local')->exists($originalRelPath)) {
+            // Si el original no existe (ej: PDF subido antes de esta feature), usamos el preview como original temporalmente.
+            $previewRelPath = "signatures/company_{$companyId}_sample_preview.pdf";
+            if (Storage::disk('local')->exists($previewRelPath)) {
+                Storage::disk('local')->copy($previewRelPath, $originalRelPath);
+            } else {
+                return;
+            }
+        }
+
+        $previewRelPath = "signatures/company_{$companyId}_sample_preview.pdf";
+        
+        // Sobrescribir el preview con el original
+        if (Storage::disk('local')->exists($previewRelPath)) {
+            Storage::disk('local')->delete($previewRelPath);
+        }
+        Storage::disk('local')->copy($originalRelPath, $previewRelPath);
+
+        $pdfAbsPath = Storage::disk('local')->path($previewRelPath);
+
+        // ── Normalizar orientación con Python ────────────────────────────
+        $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+        $pythonBin = $isWindows ? 'python' : 'python3';
+        $scriptPath = base_path('storage/scripts/normalize_rotation.py');
+        
+        $env = $isWindows ? [
+            'SystemRoot' => getenv('SystemRoot') ?: 'C:\\Windows', 
+            'PATH' => getenv('PATH')
+        ] : null;
+
+        $rotationAngle = $company->pdf_rotation ?? 0;
+        
+        $process = new \Symfony\Component\Process\Process(
+            [$pythonBin, $scriptPath, $pdfAbsPath, $pdfAbsPath, $rotationAngle],
+            null,
+            $env
+        );
+        $process->run();
+        
+        if (!$process->isSuccessful()) {
+            \Illuminate\Support\Facades\Log::error("Error normalizando rotación del PDF de muestra: " . $process->getErrorOutput());
+        }
+
+        $company->signature_preview_path = $previewRelPath;
+
+        // ── Detectar orientación/dimensiones de página con FPDI ──────────
+        try {
+            $fpdi = new Fpdi();
+            $fpdi->setSourceFile($pdfAbsPath);
+            $tplId = $fpdi->importPage(1);
+            $size  = $fpdi->getTemplateSize($tplId);
+            unset($fpdi);
+
+            $pageW = round((float) $size['width'],  2);
+            $pageH = round((float) $size['height'], 2);
+
+            $company->signature_page_w = $pageW;
+            $company->signature_page_h = $pageH;
+
+            $this->pageWmm = $pageW;
+            $this->pageHmm = $pageH;
+        } catch (\Throwable) {
+            // Si FPDI no puede leer el PDF, conservar las dimensiones previas.
+        }
+
+        $company->save();
+
+        $this->previewVersion++;
+        $this->previewAvailable = true;
+        $this->dispatch('preview-ready', pageW: $this->pageWmm, pageH: $this->pageHmm);
     }
 
     // ── Upload: imagen de firma del empleador ─────────────────────────────────
@@ -185,6 +268,7 @@ class SignatureConfigurator extends Component
         $this->validate([
             'anchorText' => 'nullable|string|max:255',
             'anchorOffsetY' => 'required|numeric|min:0|max:100',
+            'pdf_rotation' => 'required|integer|in:0,90,270',
         ]);
 
         $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
@@ -196,12 +280,14 @@ class SignatureConfigurator extends Component
 
         $company->signature_anchor_text = trim($this->anchorText) ?: null;
         $company->signature_anchor_offset_y = $this->anchorOffsetY;
+        $company->pdf_rotation = $this->pdf_rotation;
         $company->save();
 
         $this->anchorText = $company->signature_anchor_text ?? '';
         $this->anchorOffsetY = $company->signature_anchor_offset_y ?? 10.0;
+        $this->pdf_rotation = $company->pdf_rotation ?? 0;
         
-        session()->flash('message', 'Ajuste de ancla guardado correctamente.');
+        session()->flash('message', 'Configuración de ancla y rotación guardada correctamente.');
     }
 
     // ── Previsualizar Ajuste (Preview Modal) ───────────────────────────────────
@@ -233,7 +319,7 @@ class SignatureConfigurator extends Component
             $anchored = app(PdfCoordinateExtractor::class)->findCoordinates($srcPath, $this->anchorText);
 
             if (!$anchored) {
-                session()->flash('error', 'Texto ancla no encontrado en el PDF.');
+                $this->addError('anchorText', 'El texto no se encontró en el documento.');
                 return;
             }
 
@@ -248,7 +334,7 @@ class SignatureConfigurator extends Component
             $sigX = $company->signature_x ?? 0.0;
             $sigW = $company->signature_w ?? 40.0;
             $sigH = $company->signature_h ?? 20.0;
-            $sigY = $size['height'] - $anchored['y_mm_from_bottom'] - $sigH - $this->anchorOffsetY;
+            $sigY = abs($size['height'] - $anchored['y_mm_from_bottom'] - $sigH - $this->anchorOffsetY);
             
             $ext = strtolower(pathinfo($sigImagePath, PATHINFO_EXTENSION));
             if (!in_array($ext, ['png', 'jpg', 'jpeg'])) {
@@ -267,9 +353,17 @@ class SignatureConfigurator extends Component
             ]);
 
             $pdfContent = $fpdi->Output('', 'S');
-            $base64 = base64_encode($pdfContent);
+            
+            // Guardar copia temporal (solicitado por el usuario)
+            $anchoredRelPath = "signatures/company_{$companyId}_sample_anchored.pdf";
+            Storage::disk('local')->put($anchoredRelPath, $pdfContent);
 
+            // Enviar base64 para abrir el iframe del modal
+            $base64 = base64_encode($pdfContent);
             $this->dispatch('preview-generated', data: 'data:application/pdf;base64,' . $base64);
+
+            $this->previewVersion++;
+            session()->flash('message', 'Previsualización generada. Revisa el visor.');
 
         } catch (\Exception $e) {
             Log::error("Error al generar preview de firma: " . $e->getMessage());

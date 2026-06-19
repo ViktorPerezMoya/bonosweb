@@ -43,6 +43,7 @@
                 <p style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.6rem;">
                     El PDF se previsualiza en el canvas. Max 20 MB.
                 </p>
+
             </div>
 
             {{-- Imagen de firma --}}
@@ -77,6 +78,29 @@
         </div>
     </div>
 
+    {{-- ══ PANEL: Ubicación Multi-página ══════════════════════════════════════ --}}
+    <div class="glass-panel" style="margin-bottom: 1.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.4rem;">
+            <i class="ri-pages-line" style="font-size: 1.2rem; color: var(--accent);"></i>
+            <h3 style="margin: 0; font-size: 1rem;">Ubicación de la Firma en Documentos Multi-página</h3>
+        </div>
+        <p style="color: var(--text-secondary); font-size: 0.83rem; margin-bottom: 1.25rem;">
+            Si el recibo de un empleado tiene más de una hoja, elige dónde debe estamparse la firma digital visual.
+        </p>
+
+        <div style="max-width: 400px;">
+            <select wire:model.live="signature_page_placement" class="bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:ring-blue-500 focus:border-blue-500 w-full">
+                <option value="all">En todas las hojas</option>
+                <option value="first">Solo en la primera hoja</option>
+                <option value="last">Solo en la última hoja</option>
+            </select>
+            <span wire:loading wire:target="signature_page_placement" class="text-xs text-blue-400 mt-1 block">
+                <i class="ri-loader-4-line animate-spin mr-1"></i> Guardando...
+            </span>
+            @error('signature_page_placement') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
+        </div>
+    </div>
+
     {{-- ══ PANEL: Canvas interactivo ══════════════════════════════════════════ --}}
     <div class="glass-panel" style="margin-bottom: 1.5rem;"
         x-data="sigCanvas(@js([
@@ -86,7 +110,7 @@
             'hMm'        => $sigHmm,
             'pageW'      => $pageWmm,
             'pageH'      => $pageHmm,
-            'previewUrl' => $previewAvailable ? route('signature.preview') . '?v=' . time() : null,
+            'previewUrl' => $previewAvailable ? route('signature.preview') . '?v=' . $previewVersion : null,
             'sigUrl'     => $signatureAvailable ? route('signature.image') . '?v=' . time() : null,
         ]))"
         @mousemove.window="onMove($event)"
@@ -97,7 +121,21 @@
         {{-- Header del panel --}}
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
             <div>
-                <h3 style="margin: 0; font-size: 1rem;">Posición de la Firma</h3>
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem;">
+                    <h3 style="margin: 0; font-size: 1rem;">Posición de la Firma</h3>
+                    @if($previewAvailable)
+                        <div style="display: flex; align-items: center; margin-left: 1rem; gap: 0.5rem;">
+                            <select wire:model.live="pdf_rotation" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:ring-blue-500 focus:border-blue-500">
+                                <option value="0">Rotación: Original</option>
+                                <option value="90">Rotar 90°</option>
+                                <option value="270">Rotar 270°</option>
+                            </select>
+                            <span wire:loading wire:target="pdf_rotation" class="text-xs text-blue-400">
+                                <i class="ri-loader-4-line" style="animation: spin 0.8s linear infinite; display: inline-block;"></i> Girando...
+                            </span>
+                        </div>
+                    @endif
+                </div>
                 <p style="color: var(--text-secondary); font-size: 0.8rem; margin: 0.2rem 0 0;">
                     Arrastrá el recuadro rojo. Tirá del triángulo inferior-derecho para redimensionar.
                 </p>
@@ -248,11 +286,15 @@
                     </span>
                 </button>
 
-                <button type="button" class="btn" wire:click="generatePreview" 
-                        style="font-size: 0.85rem; padding: 0.45rem 1.1rem; background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border);"
-                        wire:loading.attr="disabled" wire:target="generatePreview">
-                    <span wire:loading.remove wire:target="generatePreview"><i class="ri-eye-line"></i> Previsualizar Ajuste</span>
-                    <span wire:loading wire:target="generatePreview"><i class="ri-loader-4-line" style="animation: spin 0.8s linear infinite; display: inline-block;"></i></span>
+                <button type="button" wire:click="generatePreview" wire:loading.attr="disabled"
+                        class="btn bg-slate-700 hover:bg-slate-600 text-white"
+                        style="font-size: 0.85rem; padding: 0.45rem 1.1rem; border: 1px solid var(--glass-border);">
+                    <span wire:loading.remove wire:target="generatePreview">
+                        <i class="ri-eye-line mr-1"></i> Previsualizar Ajuste
+                    </span>
+                    <span wire:loading wire:target="generatePreview">
+                        <i class="ri-loader-4-line animate-spin mr-1" style="display: inline-block;"></i> Procesando...
+                    </span>
                 </button>
 
                 @if($anchorText)
