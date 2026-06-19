@@ -46,6 +46,7 @@
                 'payslips/upload'       => ['icon' => 'ri-upload-cloud-2-line',        'label' => 'Subir Recibos'],
                 'payslips/list'         => ['icon' => 'ri-list-check-2',               'label' => 'Lotes Procesados'],
                 'reports/signatures'    => ['icon' => 'ri-shield-check-line',          'label' => 'Auditoría de Firmas'],
+                'reports/disconformities'=> ['icon' => 'ri-error-warning-line',         'label' => 'Auditoría de Disconformidades'],
                 'users'                 => ['icon' => 'ri-user-settings-line',         'label' => 'Usuarios RRHH'],
                 'configuracion/firma'   => ['icon' => 'ri-pen-nib-line',               'label' => 'Firma Empleador'],
                 'configuracion/certificado-raiz'=> ['icon' => 'ri-shield-keyhole-line',     'label' => 'Certificado Raíz'],

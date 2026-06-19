@@ -134,10 +134,21 @@ class MisBonos extends Component
                 $this->disagreementReasonId
             );
 
+            // Determinar texto del motivo si hay uno
+            $disconformityReasonText = null;
+            if ($this->signatureType !== 'conforme' && $this->disagreementReasonId) {
+                $reasonModel = \App\Models\DisagreementReason::find($this->disagreementReasonId);
+                if ($reasonModel) {
+                    $disconformityReasonText = $reasonModel->reason_text;
+                }
+            }
+
             // Actualizar estado
             $payslip->update([
                 'status' => $this->signatureType === 'conforme' ? 'signed_conforme' : 'signed_no_conforme',
                 'signed_at' => now(),
+                'disagreement_reason_id' => $this->signatureType === 'conforme' ? null : $this->disagreementReasonId,
+                'disconformity_reason' => $disconformityReasonText,
             ]);
 
             // Crear registro de auditoría de firma

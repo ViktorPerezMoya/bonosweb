@@ -30,6 +30,7 @@
         <li><a href="/payslips/upload" class="nav-link {{ request()->is('payslips/upload') ? 'active' : '' }}"><i class="ri-upload-cloud-2-line"></i> Subir Recibos</a></li>
         <li><a href="/payslips/list" class="nav-link {{ request()->is('payslips/list') ? 'active' : '' }}"><i class="ri-list-check-2"></i> Lotes Procesados</a></li>
         <li><a href="/reports/signatures" class="nav-link {{ request()->is('reports/signatures') ? 'active' : '' }}"><i class="ri-shield-check-line"></i> Auditoría de Firmas</a></li>
+        <li><a href="/reports/disconformities" class="nav-link {{ request()->is('reports/disconformities') ? 'active' : '' }}"><i class="ri-error-warning-line"></i> Auditoría Disconformes</a></li>
         <li class="pt-2"><div class="border-t border-white/10"></div></li>
         <li><a href="/configuracion/certificado-raiz" class="nav-link {{ request()->is('configuracion/certificado-raiz') ? 'active' : '' }}"><i class="ri-shield-keyhole-line"></i> Certificado Raíz</a></li>
         @if(auth()->user()->role === 'admin')

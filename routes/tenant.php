@@ -91,6 +91,7 @@ Route::middleware([
             Route::get('/payslips/{id}/view', [App\Http\Controllers\PayslipController::class, 'view'])->name('payslips.view');
 
             Route::get('/reports/signatures', App\Livewire\Reports\SignaturesTracking::class)->name('reports.signatures');
+            Route::get('/reports/disconformities', App\Livewire\Reports\DisconformityReport::class)->name('reports.disconformities');
         });
 
         Route::get('/users', App\Livewire\Tenant\UsersManager::class)->name('users.index');
