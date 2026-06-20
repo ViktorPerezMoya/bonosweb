@@ -5,8 +5,12 @@ namespace App\Models;
 use App\Models\Scopes\CurrentCompanyScope;
 use Illuminate\Database\Eloquent\Model;
 
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
+
 class Payslip extends Model
 {
+    use LogsActivity;
     protected static function booted(): void
     {
         static::addGlobalScope(new CurrentCompanyScope());
@@ -53,5 +57,14 @@ class Payslip extends Model
     public function disagreementReason()
     {
         return $this->belongsTo(DisagreementReason::class, 'disagreement_reason_id');
+    }
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs()
+            ->useLogName('recibo');
     }
 }

@@ -5,8 +5,13 @@ namespace App\Models;
 use App\Models\Scopes\CurrentCompanyScope;
 use Illuminate\Database\Eloquent\Model;
 
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
+
+
 class EmployeeProfile extends Model
 {
+    use LogsActivity;
     protected static function booted(): void
     {
         static::addGlobalScope(new CurrentCompanyScope());
@@ -46,5 +51,14 @@ class EmployeeProfile extends Model
     public function company()
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs()
+            ->useLogName('empleado');
     }
 }
