@@ -50,8 +50,8 @@
             <div x-show="open"
                  x-transition
                  style="position: relative; z-index: 50; width: 100%; margin-top: 4px;
-                        background: #1a1f2e; border: 1px solid var(--glass-border);
-                        border-radius: var(--radius-md); box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+                        background: var(--bg-secondary); border: 1px solid var(--glass-border);
+                        border-radius: var(--radius-md); box-shadow: 0 8px 32px rgba(0,0,0,0.2);
                         overflow: hidden;">
 
                 {{-- Buscador --}}
@@ -106,10 +106,10 @@
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div>
-                    <input type="text" wire:model.live="searchName" placeholder="Buscar por empleado..." class="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-blue-500 focus:border-blue-500">
+                    <input type="text" wire:model.live="searchName" placeholder="Buscar por empleado..." class="w-full form-control">
                 </div>
                 <div>
-                    <select wire:model.live="searchStatus" class="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-blue-500 focus:border-blue-500">
+                    <select wire:model.live="searchStatus" class="w-full form-control">
                         <option value="">Todos los estados</option>
                         <option value="pending">Pendientes</option>
                         <option value="signed_conforme">Firmado Conforme</option>
@@ -117,7 +117,7 @@
                     </select>
                 </div>
                 <div>
-                    <input type="date" wire:model.live="searchDate" class="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-blue-500 focus:border-blue-500">
+                    <input type="date" wire:model.live="searchDate" class="w-full form-control">
                 </div>
             </div>
 
@@ -204,7 +204,7 @@
     <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center;">
         <div class="glass-panel" style="width: 100%; max-width: 600px; background: var(--bg-secondary); border: 1px solid var(--glass-border); border-radius: var(--radius-lg); padding: 2rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 1rem;">
-                <h3 style="margin: 0; color: white; display: flex; align-items: center; gap: 0.5rem;">
+                <h3 style="margin: 0; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
                     <i class="ri-file-shield-2-line" style="color: var(--accent);"></i>
                     Detalles de Auditoría de Firma
                 </h3>
@@ -257,7 +257,7 @@
                 @if($selectedSignature->status === 'signed_no_conforme' && $selectedSignature->disconformity_reason)
                 <div style="background: rgba(239, 68, 68, 0.1); padding: 1rem; border-radius: var(--radius-md); border: 1px solid rgba(239, 68, 68, 0.2);">
                     <p style="font-size: 0.8rem; color: var(--danger); margin-bottom: 0.5rem;"><i class="ri-message-3-line"></i> Motivo de Disconformidad</p>
-                    <p style="font-size: 0.9rem; margin: 0; color: white;">
+                    <p style="font-size: 0.9rem; margin: 0; color: var(--text-primary);">
                         {{ $selectedSignature->disconformity_reason }}
                     </p>
                 </div>
@@ -265,7 +265,7 @@
             </div>
 
             <div style="margin-top: 2rem; display: flex; justify-content: flex-end;">
-                <button wire:click="closeSignatureModal" class="btn" style="background: rgba(255,255,255,0.1); color: white;">Cerrar</button>
+                <button wire:click="closeSignatureModal" class="btn" style="background: var(--input-bg); color: var(--text-primary); border: 1px solid var(--glass-border);">Cerrar</button>
             </div>
         </div>
     </div>

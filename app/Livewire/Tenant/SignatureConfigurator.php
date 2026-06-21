@@ -93,8 +93,6 @@ class SignatureConfigurator extends Component
 
     public function mount(): void
     {
-        abort_if(auth()->user()->role !== 'admin', 403);
-
         $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
         $company = Company::find($companyId);
 

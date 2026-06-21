@@ -1,5 +1,5 @@
 <div>
-    <div class="glass-panel" style="max-width: 600px; margin: 0 auto;">
+    <div class="glass-panel" style="max-width: 600px; margin: 0 auto; transform: none;">
         <h3 style="margin-bottom: 1rem;">Carga Masiva (Archivo ZIP)</h3>
         <p style="margin-bottom: 2rem; font-size: 0.9rem;">
             Por favor, suba un único archivo .ZIP que contenga los recibos en formato PDF o .PDF(sabana).
@@ -94,7 +94,7 @@
         <!-- Modal de Error -->
         @if($showErrorModal)
             <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
-                <div class="glass-panel" style="max-width: 500px; width: 90%; text-align: center; border: 1px solid rgba(239, 68, 68, 0.3);">
+                <div class="glass-panel hover-disabled" style="max-width: 500px; width: 90%; text-align: center; border: 1px solid rgba(239, 68, 68, 0.3); transform: none;">
                     <i class="ri-error-warning-fill" style="font-size: 4rem; color: var(--danger); display: block; margin-bottom: 1rem;"></i>
                     <h3 style="color: var(--text-primary); margin-bottom: 1rem;">Error al Procesar</h3>
                     <p style="color: var(--text-secondary); margin-bottom: 2rem; font-size: 0.95rem;">
@@ -103,6 +103,69 @@
                     <button type="button" class="btn" wire:click="closeErrorModal" style="background: rgba(239, 68, 68, 0.1); color: var(--danger); width: 100%;">
                         Entendido, cerrar
                     </button>
+                </div>
+            </div>
+        @endif
+
+        <!-- Modal Warning: Firma No Configurada -->
+        @if($showSignatureWarningModal)
+            <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+                <div class="glass-panel hover-disabled" style="max-width: 500px; width: 90%; text-align: center; border: 1px solid rgba(245, 158, 11, 0.3); transform: none;">
+                    <i class="ri-error-warning-fill" style="font-size: 4rem; color: var(--warning); display: block; margin-bottom: 1rem;"></i>
+                    <h3 style="color: var(--text-primary); margin-bottom: 1rem;">Firma No Configurada</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 2rem; font-size: 0.95rem;">
+                        Para procesar recibos de sueldo, es obligatorio configurar previamente la firma digital y el sello de la empresa.
+                    </p>
+                    <div style="display: flex; gap: 1rem; justify-content: center;">
+                        <button type="button" class="btn" wire:click="closeSignatureWarningModal" style="background: rgba(255, 255, 255, 0.05); color: var(--text-primary); border: 1px solid var(--glass-border);">
+                            Cancelar
+                        </button>
+                        <a href="/configuracion/firma" target="_blank" class="btn" style="background: rgba(245, 158, 11, 0.1); color: var(--warning); border: 1px solid var(--warning); text-decoration: none;">
+                            Ir a Configurar Firma
+                        </a>
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        <!-- Modal Confirmación: Previsualización de Firma -->
+        @if($showSignaturePreviewModal)
+            <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); padding: 1rem;">
+                <div class="glass-panel hover-disabled" style="max-width: 90vw; width: 100%; height: 90vh; display: flex; flex-direction: column; overflow: hidden; padding: 0; transform: none;">
+                    
+                    <div style="padding: 1rem 1.5rem; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02);">
+                        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 600;"><i class="ri-eye-line" style="color: var(--accent); margin-right: 0.5rem;"></i> Confirmar Firma</h3>
+                        <button wire:click="closeSignaturePreviewModal" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.25rem;">
+                            <i class="ri-close-line"></i>
+                        </button>
+                    </div>
+
+                    <div style="flex: 1; background: #525659; overflow: hidden; position: relative;">
+                        @if($signaturePreviewUrl)
+                            <iframe src="{{ $signaturePreviewUrl }}" style="width: 100%; height: 100%; border: none;"></iframe>
+                        @else
+                            <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; color: #ccc;">
+                                <i class="ri-checkbox-circle-fill" style="font-size: 4rem; color: var(--success); margin-bottom: 1rem;"></i>
+                                <h3 style="color: var(--text-primary);">Firma Configurada</h3>
+                                <p style="color: var(--text-secondary); max-width: 400px; text-align: center; margin-top: 0.5rem;">La firma se aplicará de acuerdo a las coordenadas configuradas, pero no hay un recibo de muestra disponible para previsualizar.</p>
+                            </div>
+                        @endif
+                    </div>
+
+                    <div style="padding: 1rem 1.5rem; border-top: 1px solid var(--glass-border); display: flex; justify-content: flex-end; gap: 1rem; background: rgba(255,255,255,0.02);">
+                        <a href="/configuracion/firma" target="_blank" class="btn" style="background: rgba(255, 255, 255, 0.05); color: var(--text-primary); border: 1px solid var(--glass-border); text-decoration: none;">
+                            <i class="ri-settings-3-line" style="margin-right: 5px;"></i> Ajustar Firma
+                        </a>
+                        <button type="button" class="btn btn-primary" wire:click="proceedWithUpload" wire:loading.attr="disabled" wire:target="proceedWithUpload">
+                            <span wire:loading.remove wire:target="proceedWithUpload">
+                                <i class="ri-check-line" style="margin-right: 5px;"></i> Continuar y Procesar
+                            </span>
+                            <span wire:loading wire:target="proceedWithUpload">
+                                <i class="ri-loader-4-line" style="animation: spin 0.8s linear infinite; display: inline-block;"></i> Iniciando procesamiento...
+                            </span>
+                        </button>
+                    </div>
+
                 </div>
             </div>
         @endif
@@ -119,6 +182,9 @@
         button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+        }
+        .hover-disabled:hover {
+            transform: none !important;
         }
     </style>
 </div>

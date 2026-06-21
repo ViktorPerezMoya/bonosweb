@@ -23,6 +23,11 @@ class Upload extends Component
     public $uploadSuccess = false;
     public $showErrorModal = false;
     public $errorMessage = '';
+    
+    // Signature validation properties
+    public $showSignatureWarningModal = false;
+    public $showSignaturePreviewModal = false;
+    public $signaturePreviewUrl = null;
 
     public function mount()
     {
@@ -48,6 +53,36 @@ class Upload extends Component
     public function save()
     {
         $this->validate();
+
+        try {
+            $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
+            $company = \App\Models\Company::find($companyId);
+
+            // 1. Verificamos si existe firma
+            if (empty($company->signature_image_path)) {
+                $this->showSignatureWarningModal = true;
+                return;
+            }
+
+            // 2. Preparamos previsualización
+            if ($company->signature_preview_path) {
+                $this->signaturePreviewUrl = route('signature.preview.rendered') . '?v=' . time();
+            } else {
+                $this->signaturePreviewUrl = null;
+            }
+
+            // 3. Mostramos modal de confirmación visual
+            $this->showSignaturePreviewModal = true;
+
+        } catch (\Exception $e) {
+            $this->errorMessage = "Error verificando configuración: " . $e->getMessage();
+            $this->showErrorModal = true;
+        }
+    }
+
+    public function proceedWithUpload()
+    {
+        $this->showSignaturePreviewModal = false;
 
         try {
             // 1. Detectar tipo de archivo y almacenar
@@ -127,6 +162,16 @@ class Upload extends Component
     {
         $this->showErrorModal = false;
         $this->errorMessage = '';
+    }
+
+    public function closeSignatureWarningModal()
+    {
+        $this->showSignatureWarningModal = false;
+    }
+
+    public function closeSignaturePreviewModal()
+    {
+        $this->showSignaturePreviewModal = false;
     }
 
     public function render()

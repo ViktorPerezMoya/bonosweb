@@ -1,7 +1,7 @@
 <div>
     <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 2rem;">
         <div>
-            <h2 style="font-size: 1.5rem; font-weight: 500; color: white; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+            <h2 style="font-size: 1.5rem; font-weight: 500; color: var(--text-primary); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
                 <i class="ri-error-warning-line" style="color: var(--accent);"></i>
                 Auditoría de Disconformidades
             </h2>
@@ -26,12 +26,12 @@
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
                 <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Empleado</label>
-                <input type="text" wire:model.live="searchEmployee" placeholder="Buscar por nombre..." class="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-blue-500 focus:border-blue-500">
+                <input type="text" wire:model.live="searchEmployee" placeholder="Buscar por nombre..." class="w-full form-control">
             </div>
             
             <div>
                 <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Motivo de Disconformidad</label>
-                <select wire:model.live="searchReason" class="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-blue-500 focus:border-blue-500">
+                <select wire:model.live="searchReason" class="w-full form-control">
                     <option value="">Todos los motivos</option>
                     @foreach($reasons as $reason)
                         <option value="{{ $reason->id }}">{{ $reason->reason_text }}</option>
@@ -41,12 +41,12 @@
 
             <div>
                 <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Año</label>
-                <input type="number" wire:model.live="searchYear" placeholder="Ej: {{ date('Y') }}" class="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-blue-500 focus:border-blue-500">
+                <input type="number" wire:model.live="searchYear" placeholder="Ej: {{ date('Y') }}" class="w-full form-control">
             </div>
 
             <div>
                 <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Mes</label>
-                <select wire:model.live="searchMonth" class="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-white focus:ring-blue-500 focus:border-blue-500">
+                <select wire:model.live="searchMonth" class="w-full form-control">
                     <option value="">Todos los meses</option>
                     @for($i = 1; $i <= 12; $i++)
                         <option value="{{ $i }}">{{ str_pad($i, 2, '0', STR_PAD_LEFT) }}</option>

@@ -7,6 +7,13 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
     @livewireStyles
+    <script>
+        if (localStorage.theme === 'light') {
+            document.documentElement.classList.remove('dark');
+        } else {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
 </head>
 <body>
     @auth
@@ -67,14 +74,23 @@
                     <i class="ri-menu-line text-xl"></i>
                 </button>
                 <i class="{{ $pageIcon }} text-accent text-xl shrink-0 hidden md:inline-block"></i>
-                <h2 class="m-0 text-base font-bold text-white md:text-lg" style="letter-spacing: -0.01em;">{{ $pageLabel }}</h2>
+                <h2 class="m-0 text-base font-bold md:text-lg" style="letter-spacing: -0.01em; color: var(--text-primary);">{{ $pageLabel }}</h2>
 
-                {{-- Company Switcher (solo si hay tenant activo con múltiples empresas) --}}
-                @if(function_exists('tenant') && tenant())
-                <div class="ml-auto shrink-0">
+                <div class="ml-auto flex items-center gap-2 shrink-0">
+                    {{-- Toggle Tema --}}
+                    <div x-data="{ isDark: document.documentElement.classList.contains('dark') }">
+                        <button @click="isDark = !isDark; isDark ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark'); localStorage.theme = isDark ? 'dark' : 'light'"
+                                class="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                                :title="isDark ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'">
+                            <i :class="isDark ? 'ri-sun-line text-yellow-400' : 'ri-moon-line text-slate-700'" class="text-xl"></i>
+                        </button>
+                    </div>
+
+                    {{-- Company Switcher (solo si hay tenant activo con múltiples empresas) --}}
+                    @if(function_exists('tenant') && tenant())
                     <livewire:tenant.company-switcher />
+                    @endif
                 </div>
-                @endif
             </header>
 
             {{-- Contenido de página --}}

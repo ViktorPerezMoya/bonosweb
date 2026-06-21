@@ -1,8 +1,8 @@
 <div>
     <div class="flex justify-between items-center mb-6">
         <div>
-            <h1 class="text-2xl font-bold text-white">Motivos de Disconformidad</h1>
-            <p class="text-sm text-gray-400 mt-1">Configura las opciones que los empleados pueden seleccionar al firmar en disconformidad.</p>
+            <h1 class="text-2xl font-bold" style="color: var(--text-primary);">Motivos de Disconformidad</h1>
+            <p class="text-sm mt-1" style="color: var(--text-secondary);">Configura las opciones que los empleados pueden seleccionar al firmar en disconformidad.</p>
         </div>
     </div>
 
@@ -18,11 +18,11 @@
     @endif
 
     <div class="glass-panel p-6 mb-6">
-        <h2 class="text-lg font-medium text-white mb-4">Agregar Nuevo Motivo</h2>
+        <h2 class="text-lg font-medium mb-4" style="color: var(--text-primary);">Agregar Nuevo Motivo</h2>
         <form wire:submit.prevent="addReason" class="flex gap-4 items-start">
             <div class="flex-1">
                 <input type="text" wire:model.defer="newReason" 
-                       class="form-input w-full h-10 mt-2 bg-slate-800/50 border border-slate-700 rounded text-white" 
+                       class="form-control w-full h-10 mt-2" 
                        placeholder="Ej. Diferencia en liquidación">
                 @error('newReason') <span class="text-red-400 text-xs mt-1 block">{{ $message }}</span> @enderror
             </div>
@@ -33,29 +33,29 @@
     </div>
 
     <div class="glass-panel overflow-hidden">
-        <table class="w-full text-left text-sm text-gray-300">
-            <thead class="bg-slate-800/80 text-xs uppercase text-gray-400 border-b border-white/10">
+        <table class="modern-table w-full text-left text-sm">
+            <thead>
                 <tr>
-                    <th class="px-6 py-4">Motivo</th>
-                    <th class="px-6 py-4 w-32">Estado</th>
-                    <th class="px-6 py-4 w-32 text-right">Acciones</th>
+                    <th>Motivo</th>
+                    <th class="w-32">Estado</th>
+                    <th class="w-32 text-right" style="text-align: right;">Acciones</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-white/5">
+            <tbody>
                 @forelse($reasons as $reason)
-                    <tr class="hover:bg-white/5 transition-colors">
+                    <tr>
                         <td class="px-6 py-4">
                             @if($editingId === $reason->id)
                                 <div class="flex gap-2">
                                     <input type="text" wire:model.defer="editingReasonText" 
-                                           class="form-input w-full bg-slate-800/50 border border-slate-700 rounded text-white px-2 py-1 text-sm">
+                                           class="form-control w-full px-2 py-1 text-sm">
                                 </div>
                                 @error('editingReasonText') <span class="text-red-400 text-xs">{{ $message }}</span> @enderror
                             @else
                                 {{ $reason->reason_text }}
                             @endif
                         </td>
-                        <td class="px-6 py-4">
+                        <td class="px-6 py-4" style="vertical-align: middle;">
                             @if($reason->is_active)
                                 <span class="px-2 py-1 text-xs rounded-full bg-green-500/20 text-green-400 border border-green-500/30">
                                     Activo
@@ -66,7 +66,7 @@
                                 </span>
                             @endif
                         </td>
-                        <td class="px-6 py-4 text-right">
+                        <td class="px-6 py-4 text-right" style="vertical-align: middle;">
                             @if($editingId === $reason->id)
                                 <button wire:click="updateReason" class="text-green-400 hover:text-green-300 mr-2" title="Guardar">
                                     <i class="ri-check-line text-lg"></i>
@@ -86,7 +86,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="3" class="px-6 py-8 text-center text-gray-500">
+                        <td colspan="3" class="px-6 py-8 text-center" style="color: var(--text-secondary);">
                             No hay motivos de disconformidad configurados.
                         </td>
                     </tr>

@@ -92,6 +92,7 @@ Route::middleware([
 
             Route::get('/reports/signatures', App\Livewire\Reports\SignaturesTracking::class)->name('reports.signatures');
             Route::get('/reports/disconformities', App\Livewire\Reports\DisconformityReport::class)->name('reports.disconformities');
+            Route::get('/configuracion/firma', App\Livewire\Tenant\SignatureConfigurator::class)->name('signature.configurator');
         });
 
         Route::get('/users', App\Livewire\Tenant\UsersManager::class)->name('users.index');
@@ -99,7 +100,6 @@ Route::middleware([
 
         // ── Secciones exclusivas de Administrador ────────────────────────────
         Route::middleware('tenant.admin')->group(function () {
-            Route::get('/configuracion/firma', App\Livewire\Tenant\SignatureConfigurator::class)->name('signature.configurator');
             Route::get('/configuracion/branding', App\Livewire\Tenant\BrandingSettings::class)->name('branding.settings');
             Route::get('/configuracion/motivos-disconformidad', App\Livewire\Tenant\DisagreementReasons::class)->name('disagreement-reasons');
         });
@@ -108,7 +108,7 @@ Route::middleware([
         Route::get('/configuracion/certificado-raiz', App\Livewire\Tenant\RootCertificateDownload::class)
             ->name('root.certificate.download');
 
-        // Servir imagen de previsualización (primera página del PDF modelo)
+        // Servir imagen de previsualización (primera página del PDF modelo sin firma)
         Route::get('/configuracion/firma/preview-image', function () {
             $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
             $company = Company::find($companyId);
@@ -119,6 +119,65 @@ Route::middleware([
                 ['Content-Type' => 'application/pdf', 'Cache-Control' => 'no-cache, no-store']
             );
         })->name('signature.preview');
+
+        // Servir previsualización renderizada (PDF con la firma aplicada)
+        Route::get('/configuracion/firma/preview-rendered', function () {
+            $companyId = app(CompanyContextService::class)->getCurrentCompanyId();
+            $company = Company::find($companyId);
+            
+            if (!$company || empty($company->signature_preview_path) || empty($company->signature_image_path)) {
+                abort(404);
+            }
+            
+            $srcPath = \Illuminate\Support\Facades\Storage::disk('local')->path($company->signature_preview_path);
+            $sigImagePath = \Illuminate\Support\Facades\Storage::disk('local')->path($company->signature_image_path);
+            
+            if (!file_exists($srcPath) || !file_exists($sigImagePath)) {
+                abort(404);
+            }
+
+            try {
+                $fpdi = new \App\Pdf\CustomFpdi();
+                $fpdi->setSourceFile($srcPath);
+                $tplId = $fpdi->importPage(1);
+                $size = $fpdi->getTemplateSize($tplId);
+
+                $fpdi->AddPage($size['orientation'] ?? 'P', [$size['width'], $size['height']]);
+                $fpdi->useTemplate($tplId, 0, 0, $size['width'], $size['height']);
+
+                $sigX = $company->signature_x ?? 0.0;
+                $sigY = $company->signature_y ?? 0.0;
+                $sigW = $company->signature_w ?? 40.0;
+                $sigH = $company->signature_h ?? 20.0;
+                
+                if (!empty($company->signature_anchor_text)) {
+                    $anchored = app(\App\Services\PdfCoordinateExtractor::class)->findCoordinates($srcPath, $company->signature_anchor_text);
+                    if ($anchored) {
+                        $offsetY = $company->signature_anchor_offset_y ?? 10.0;
+                        $sigY = abs($size['height'] - $anchored['y_mm_from_bottom'] - $sigH - $offsetY);
+                        if ($anchored['x_mm'] > 5.0) {
+                            $sigX = $anchored['x_mm'] + 15 - ($sigW / 2);
+                        }
+                    }
+                }
+
+                $ext = strtolower(pathinfo($sigImagePath, PATHINFO_EXTENSION));
+                if (!in_array($ext, ['png', 'jpg', 'jpeg'])) {
+                    $ext = 'png';
+                }
+
+                $fpdi->Image($sigImagePath, $sigX, $sigY, $sigW, $sigH, strtoupper($ext));
+                $pdfContent = $fpdi->Output('', 'S');
+                
+                return response($pdfContent)
+                    ->header('Content-Type', 'application/pdf')
+                    ->header('Cache-Control', 'no-cache, no-store');
+
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error("Error generating rendered preview: " . $e->getMessage());
+                return response()->file($srcPath, ['Content-Type' => 'application/pdf', 'Cache-Control' => 'no-cache, no-store']);
+            }
+        })->name('signature.preview.rendered');
 
         // Servir imagen de la firma del empleador
         Route::get('/configuracion/firma/signature-image', function () {

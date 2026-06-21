@@ -26,6 +26,7 @@
         @else
         {{-- ── Menú Admin / RRHH ─────────────────────────────────────── --}}
         <li><a href="/dashboard" class="nav-link {{ request()->is('dashboard') ? 'active' : '' }}"><i class="ri-dashboard-line"></i> Dashboard</a></li>
+        <li><a href="/configuracion/firma" class="nav-link {{ request()->is('configuracion/firma') ? 'active' : '' }}"><i class="ri-pen-nib-line"></i> Firma Empleador</a></li>
         <li><a href="/employees" class="nav-link {{ request()->is('employees') ? 'active' : '' }}"><i class="ri-team-line"></i> Empleados</a></li>
         <li><a href="/payslips/upload" class="nav-link {{ request()->is('payslips/upload') ? 'active' : '' }}"><i class="ri-upload-cloud-2-line"></i> Subir Recibos</a></li>
         <li><a href="/payslips/list" class="nav-link {{ request()->is('payslips/list') ? 'active' : '' }}"><i class="ri-list-check-2"></i> Lotes Procesados</a></li>
@@ -36,7 +37,6 @@
         @if(auth()->user()->role === 'admin')
         <li><a href="/users" class="nav-link {{ request()->is('users') ? 'active' : '' }}"><i class="ri-user-settings-line"></i> Usuarios RRHH</a></li>
         <li><a href="/empresas" class="nav-link {{ request()->is('empresas') ? 'active' : '' }}"><i class="ri-building-4-line"></i> Empresas</a></li>
-        <li><a href="/configuracion/firma" class="nav-link {{ request()->is('configuracion/firma') ? 'active' : '' }}"><i class="ri-pen-nib-line"></i> Firma Empleador</a></li>
         <li><a href="/configuracion/branding" class="nav-link {{ request()->is('configuracion/branding') ? 'active' : '' }}"><i class="ri-palette-line"></i> Identidad Visual</a></li>
         <li><a href="/configuracion/motivos-disconformidad" class="nav-link {{ request()->is('configuracion/motivos-disconformidad') ? 'active' : '' }}"><i class="ri-question-answer-line"></i> Motivos Disconformidad</a></li>
         @endif

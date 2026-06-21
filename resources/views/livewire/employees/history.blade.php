@@ -113,10 +113,10 @@
     @if($showPdfModal)
     <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); z-index: 1000; display: flex; flex-direction: column;">
         <div style="padding: 1rem 2rem; background: var(--bg-secondary); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--glass-border);">
-            <h3 style="margin: 0; color: white;">Visor de Recibo Original</h3>
+            <h3 style="margin: 0; color: var(--text-primary);">Visor de Recibo Original</h3>
             <div style="display: flex; gap: 1rem;">
                 <a href="{{ $selectedPdfUrl }}?download=1" class="btn btn-primary" style="font-size: 0.85rem; padding: 0.4rem 0.8rem;"><i class="ri-download-line"></i> Descargar</a>
-                <button wire:click="closePdfModal" style="background: none; border: none; color: white; font-size: 2rem; cursor: pointer; line-height: 1;">&times;</button>
+                <button wire:click="closePdfModal" style="background: none; border: none; color: var(--text-primary); font-size: 2rem; cursor: pointer; line-height: 1;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-primary)'">&times;</button>
             </div>
         </div>
         <div style="flex-grow: 1; padding: 2rem; display: flex; justify-content: center;">

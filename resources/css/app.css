@@ -25,17 +25,21 @@
 
 /* ── CSS vars (compatibilidad con vistas existentes) ── */
 :root {
-    --bg-primary:     #0f172a;
-    --bg-secondary:   #1e293b;
-    --text-primary:   #f8fafc;
-    --text-secondary: #94a3b8;
+    --bg-primary:     #f8fafc;
+    --bg-secondary:   #ffffff;
+    --text-primary:   #0f172a;
+    --text-secondary: #475569;
     --accent:         #3b82f6;
     --accent-hover:   #2563eb;
     --success:        #10b981;
     --danger:         #ef4444;
     --warning:        #f59e0b;
-    --glass-bg:       rgba(30, 41, 59, 0.7);
-    --glass-border:   rgba(255, 255, 255, 0.1);
+    --glass-bg:       rgba(255, 255, 255, 0.85);
+    --glass-border:   rgba(0, 0, 0, 0.1);
+    --body-gradient:  linear-gradient(to bottom right, #f8fafc, #e2e8f0);
+    --input-bg:       rgba(255, 255, 255, 0.9);
+    --nav-hover:      rgba(59, 130, 246, 0.1);
+    
     --radius-sm:      8px;
     --radius-md:      12px;
     --radius-lg:      16px;
@@ -43,6 +47,20 @@
     --spacing-sm:     0.5rem;
     --spacing-md:     1rem;
     --spacing-lg:     2rem;
+    --shadow-soft:    0 10px 25px -5px rgba(0, 0, 0, 0.05);
+    --shadow-glow:    0 0 15px rgba(59, 130, 246, 0.3);
+}
+
+:root.dark {
+    --bg-primary:     #0f172a;
+    --bg-secondary:   #1e293b;
+    --text-primary:   #f8fafc;
+    --text-secondary: #94a3b8;
+    --glass-bg:       rgba(30, 41, 59, 0.7);
+    --glass-border:   rgba(255, 255, 255, 0.1);
+    --body-gradient:  radial-gradient(circle at top right, #1e293b, #0f172a);
+    --input-bg:       rgba(15, 23, 42, 0.6);
+    --nav-hover:      rgba(171, 201, 250, 0.15);
     --shadow-soft:    0 10px 25px -5px rgba(0, 0, 0, 0.3);
     --shadow-glow:    0 0 15px rgba(59, 130, 246, 0.5);
 }
@@ -50,10 +68,11 @@
 /* ── Base ── */
 body {
     font-family: 'Inter', sans-serif;
-    background: radial-gradient(circle at top right, #1e293b, #0f172a);
+    background: var(--body-gradient);
     color: var(--text-primary);
     min-height: 100vh;
     overflow-x: hidden;
+    transition: background 0.3s ease, color 0.3s ease;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -144,7 +163,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
     font-size: 0.9rem;
 }
 .nav-link:hover{
-    background: rgba(171, 201, 250, 0.15);
+    background: var(--nav-hover);
     color: var(--accent);
 }
 .nav-link.active {
@@ -206,14 +225,14 @@ p { line-height: 1.5; color: var(--text-secondary); }
 .form-group { margin-bottom: var(--spacing-md); display: flex; flex-direction: column; }
 .form-label { margin-bottom: var(--spacing-sm); font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); }
 .form-control {
-    background: rgba(15, 23, 42, 0.6);
+    background: var(--input-bg);
     border: 1px solid var(--glass-border);
     color: var(--text-primary);
     padding: 0.75rem 1rem;
     border-radius: var(--radius-md);
     font-family: 'Inter', sans-serif;
     font-size: 0.95rem;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    transition: background 0.3s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.3s ease;
 }
 .form-control:focus {
     outline: none;
@@ -232,7 +251,7 @@ p { line-height: 1.5; color: var(--text-secondary); }
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
-.modern-table tr:hover { background: rgba(255, 255, 255, 0.02); }
+.modern-table tr:hover { background: var(--nav-hover); }
 
 /* ── Badges ── */
 .badge { padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }

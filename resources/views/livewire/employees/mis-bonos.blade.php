@@ -100,11 +100,11 @@
     {{-- ── Modal del Visor Seguro ────────────────────────────────────────────── --}}
     @if($showModal && $this->selectedPayslip)
         <div class="fixed inset-0 z-40 flex items-center justify-center bg-black/80 backdrop-blur-sm p-0 md:p-4">
-            <div class="bg-slate-900 rounded-none md:rounded-xl shadow-2xl w-full h-full md:max-w-5xl md:h-[90vh] flex flex-col border border-white/10 overflow-hidden relative">
+            <div class="rounded-none md:rounded-xl shadow-2xl w-full h-full md:max-w-5xl md:h-[90vh] flex flex-col overflow-hidden relative" style="background: var(--bg-primary); border: 1px solid var(--glass-border);">
                 
                 {{-- Toolbar del Modal --}}
-                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 bg-slate-800 border-b border-white/10 shrink-0">
-                    <div class="text-white font-semibold flex items-center gap-3">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4 shrink-0" style="background: var(--bg-secondary); border-bottom: 1px solid var(--glass-border);">
+                    <div class="font-semibold flex items-center gap-3" style="color: var(--text-primary);">
                         <h2>Visor de Recibo</h2>
                         @if($this->selectedPayslip->status === 'signed_conforme')
                             <span class="px-2 py-1 bg-emerald-500/20 text-emerald-400 text-xs rounded border border-emerald-500/30 font-medium flex items-center">
@@ -115,7 +115,7 @@
                                 <i class="ri-shield-check-fill mr-1"></i> Firmado No Conforme
                             </span>
                         @endif
-                        <button wire:click="closeViewer" class="md:hidden text-gray-400 hover:text-white p-1 ml-auto">
+                        <button wire:click="closeViewer" class="md:hidden p-1 ml-auto" style="color: var(--text-secondary);" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-secondary)'">
                             <i class="ri-close-line text-2xl"></i>
                         </button>
                     </div>
@@ -132,14 +132,14 @@
                                 <i class="ri-download-line mr-1"></i> Descargar PDF
                             </a>
                         @endif
-                        <button wire:click="closeViewer" class="hidden md:flex text-gray-400 hover:text-white items-center justify-center p-2 ml-2 transition-colors">
+                        <button wire:click="closeViewer" class="hidden md:flex items-center justify-center p-2 ml-2 transition-colors" style="color: var(--text-secondary);" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-secondary)'">
                             <i class="ri-close-line text-3xl"></i>
                         </button>
                     </div>
                 </div>
 
                 {{-- Contenido Principal --}}
-                <div class="flex-1 relative overflow-hidden bg-gray-900">
+                <div class="flex-1 relative overflow-hidden" style="background: var(--bg-primary);">
                     
                     {{-- Visor PDF Seguro (PDF.js + AlpineJS) --}}
                     <div class="absolute inset-0 flex flex-col" 
@@ -149,11 +149,11 @@
                          x-data="pdfViewer('{{ route('payslips.view', $this->selectedPayslip->id) }}?v={{ $this->selectedPayslip->status }}')">
                         
                         {{-- Barra de Controles Custom --}}
-                        <div class="flex justify-center items-center gap-4 py-2 bg-slate-800 border-b border-white/10 shrink-0 z-10">
-                            <button @click="zoomOut" class="text-white hover:text-blue-400 px-2 py-1 bg-slate-700 rounded transition"><i class="ri-zoom-out-line"></i></button>
-                            <span class="text-white text-sm font-medium w-12 text-center" x-text="Math.round(scale * 100) + '%'"></span>
-                            <button @click="zoomIn" class="text-white hover:text-blue-400 px-2 py-1 bg-slate-700 rounded transition"><i class="ri-zoom-in-line"></i></button>
-                            <button @click="resetZoom" class="text-white hover:text-blue-400 px-3 py-1 bg-slate-700 rounded text-sm ml-2 transition"><i class="ri-refresh-line mr-1"></i>Reset</button>
+                        <div class="flex justify-center items-center gap-4 py-2 shrink-0 z-10" style="background: var(--bg-secondary); border-bottom: 1px solid var(--glass-border);">
+                            <button @click="zoomOut" class="px-2 py-1 rounded transition" style="color: var(--text-primary); background: var(--input-bg);"><i class="ri-zoom-out-line"></i></button>
+                            <span class="text-sm font-medium w-12 text-center" x-text="Math.round(scale * 100) + '%'" style="color: var(--text-primary);"></span>
+                            <button @click="zoomIn" class="px-2 py-1 rounded transition" style="color: var(--text-primary); background: var(--input-bg);"><i class="ri-zoom-in-line"></i></button>
+                            <button @click="resetZoom" class="px-3 py-1 rounded text-sm ml-2 transition" style="color: var(--text-primary); background: var(--input-bg);"><i class="ri-refresh-line mr-1"></i>Reset</button>
                         </div>
 
                         {{-- Contenedor del Canvas --}}
@@ -165,12 +165,12 @@
 
                 {{-- Modal Interno Flotante para Firma --}}
                 <div x-show="showSignModal" x-cloak class="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                    <div class="bg-slate-900/80 backdrop-blur-md border border-slate-700/50 shadow-2xl rounded-xl w-full max-w-sm p-6">
-                        <h3 class="text-white font-medium text-lg mb-4" x-text="signType === 'conforme' ? 'Firma en Conformidad' : 'Firma en Disconformidad'"></h3>
+                    <div class="shadow-2xl rounded-xl w-full max-w-sm p-6" style="background: var(--bg-secondary); border: 1px solid var(--glass-border);">
+                        <h3 class="font-medium text-lg mb-4" x-text="signType === 'conforme' ? 'Firma en Conformidad' : 'Firma en Disconformidad'" style="color: var(--text-primary);"></h3>
                         
                         <div x-show="signType === 'no_conforme'" class="mb-4">
-                            <label class="block text-sm text-gray-400 mb-1">Motivo de Disconformidad</label>
-                            <select wire:model="disagreementReasonId" class="w-full bg-slate-800 border border-slate-600 rounded text-white p-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-sm mb-1" style="color: var(--text-secondary);">Motivo de Disconformidad</label>
+                            <select wire:model="disagreementReasonId" class="w-full form-control">
                                 <option value="">-- Seleccione un motivo --</option>
                                 @foreach($this->activeReasons as $reason)
                                     <option value="{{ $reason->id }}">{{ $reason->reason_text }}</option>
@@ -180,13 +180,13 @@
                         </div>
 
                         <div class="mb-5">
-                            <label class="block text-sm text-gray-400 mb-1">Contraseña de acceso</label>
-                            <input type="password" wire:model="signaturePassword" placeholder="Tu contraseña" class="w-full bg-slate-800 border border-slate-600 rounded text-white p-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+                            <label class="block text-sm mb-1" style="color: var(--text-secondary);">Contraseña de acceso</label>
+                            <input type="password" wire:model="signaturePassword" placeholder="Tu contraseña" class="w-full form-control">
                             @error('signaturePassword') <span class="text-red-400 text-xs mt-1 block">{{ $message }}</span> @enderror
                         </div>
 
                         <div class="flex items-center gap-3">
-                            <button @click="showSignModal = false" class="flex-1 py-2 rounded text-gray-300 bg-slate-700 hover:bg-slate-600 transition text-sm">
+                            <button @click="showSignModal = false" class="flex-1 py-2 rounded transition text-sm" style="color: var(--text-primary); background: var(--input-bg);" onmouseover="this.style.background='var(--nav-hover)'" onmouseout="this.style.background='var(--input-bg)'">
                                 Cancelar
                             </button>
                             <button wire:click="signPayslip" wire:loading.attr="disabled" :class="signType === 'conforme' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'" class="flex-1 py-2 rounded text-white font-medium transition text-sm flex justify-center">
