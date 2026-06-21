@@ -65,7 +65,7 @@ class ProvisionNewTenantData implements ShouldQueue
                 // Los campos company_name y employer_cuit son columnas custom del
                 // Tenant central (getCustomColumns). Los campos admin_* viven en el
                 // JSON 'data' del Tenant pero son accesibles vía magic __get.
-                Company::withoutGlobalScope(CurrentCompanyScope::class)
+                $company = Company::withoutGlobalScope(CurrentCompanyScope::class)
                     ->create([
                         'name'                   => $this->tenant->company_name ?? $this->tenant->id,
                         'cuit'                   => $this->tenant->employer_cuit
@@ -74,6 +74,16 @@ class ProvisionNewTenantData implements ShouldQueue
                         'signature_pfx_path'     => null,
                         'signature_pfx_password' => null,
                     ]);
+
+                // ── Generar certificado digital automático ───────────────────
+                $certGenerator = app(\App\Services\CompanyCertificateGenerator::class);
+                $certData = $certGenerator->generate($company->name, $company->cuit, $company->id);
+
+                $company->update([
+                    'signature_pfx_path'       => $certData['pfx_path'],
+                    'signature_pfx_password'   => $certData['pfx_password'],
+                    'signature_pfx_expires_at' => $certData['expires_at'],
+                ]);
 
                 // Nota: NO se crea EmployeeProfile para el admin inicial.
                 // Un usuario Admin/RRHH no requiere legajo. Si también actúa como

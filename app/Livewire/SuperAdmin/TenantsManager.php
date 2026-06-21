@@ -230,7 +230,20 @@ class TenantsManager extends Component
     public function generateCompanyCert(string $tenantId, int $companyId): void
     {
         $tenant = Tenant::findOrFail($tenantId);
-        $this->buildAndStorePfx($tenant, $companyId);
+        
+        $tenant->run(function () use ($companyId) {
+            $company = \App\Models\Company::withoutGlobalScope(CurrentCompanyScope::class)
+                ->findOrFail($companyId);
+                
+            $certGenerator = app(\App\Services\CompanyCertificateGenerator::class);
+            $certData = $certGenerator->generate($company->name, $company->cuit, $company->id);
+
+            $company->update([
+                'signature_pfx_path'       => $certData['pfx_path'],
+                'signature_pfx_password'   => $certData['pfx_password'],
+                'signature_pfx_expires_at' => $certData['expires_at'],
+            ]);
+        });
 
         // Refresca el listado en el modal
         $this->openCompanyCertModal($tenantId);
@@ -244,7 +257,7 @@ class TenantsManager extends Component
     {
         $tenant = Tenant::findOrFail($tenantId);
 
-        // Eliminar el PFX previo del disco del tenant
+        // Eliminar el PFX previo y generar uno nuevo del disco del tenant
         $tenant->run(function () use ($companyId) {
             $company = \App\Models\Company::withoutGlobalScope(CurrentCompanyScope::class)
                 ->findOrFail($companyId);
@@ -253,88 +266,20 @@ class TenantsManager extends Component
                 && Storage::disk('local')->exists($company->signature_pfx_path)) {
                 Storage::disk('local')->delete($company->signature_pfx_path);
             }
-        });
 
-        $this->buildAndStorePfx($tenant, $companyId);
+            $certGenerator = app(\App\Services\CompanyCertificateGenerator::class);
+            $certData = $certGenerator->generate($company->name, $company->cuit, $company->id);
+
+            $company->update([
+                'signature_pfx_path'       => $certData['pfx_path'],
+                'signature_pfx_password'   => $certData['pfx_password'],
+                'signature_pfx_expires_at' => $certData['expires_at'],
+            ]);
+        });
 
         // Refresca el listado en el modal
         $this->openCompanyCertModal($tenantId);
         session()->flash('message', "Certificado PFX renovado para la empresa #{$companyId}.");
-    }
-
-    /**
-     * Genera par RSA 2048 + X.509 autofirmado (SHA-256, 10 años),
-     * los empaqueta en un archivo PKCS#12 (.pfx) SIN contraseña y los persiste
-     * en el disco del tenant (FilesystemTenancyBootstrapper activo en run()).
-     *
-     * Flujo:
-     *  1. Leer datos de la Company desde la BD del tenant.
-     *  2. Generar clave + cert en memoria (sin I/O aún).
-     *  3. Exportar como PFX con openssl_pkcs12_export().
-     *  4. Dentro de $tenant->run(): escribir el .pfx en Storage::disk('local')
-     *     (que en contexto tenant apunta a storage/tenant{id}/app/private/)
-     *     y actualizar Company.signature_pfx_path con la ruta relativa.
-     */
-    private function buildAndStorePfx(Tenant $tenant, int $companyId): void
-    {
-        // 1. Datos de la subempresa
-        $companyData = $tenant->run(function () use ($companyId) {
-            $c = \App\Models\Company::withoutGlobalScope(CurrentCompanyScope::class)
-                ->findOrFail($companyId);
-            return ['name' => $c->name, 'cuit' => $c->cuit];
-        });
-
-        // 2. Generar par de claves y certificado X.509 (en memoria, contexto central)
-        $dn = [
-            'countryName'            => 'AR',
-            'stateOrProvinceName'    => 'Mendoza',
-            'localityName'           => 'Mendoza',
-            'organizationName'       => 'bonosweb.com.ar',
-            //'organizationalUnitName' => 'Recursos Humanos',
-            'commonName'             => $companyData['name'],
-            'emailAddress'           => 'rrhh@' . $tenant->id . '.bonosweb.com',
-        ];
-
-        $privkey = openssl_pkey_new([
-            'private_key_bits' => 2048,
-            'private_key_type' => OPENSSL_KEYTYPE_RSA,
-        ]);
-
-        $csr  = openssl_csr_new($dn, $privkey, ['digest_alg' => 'sha256']);
-        
-        // Cargar Certificado y Clave Raíz (Root CA) central
-        $rootCertPath = base_path('storage/app/private/certs/system_cert.crt');
-        $rootKeyPath  = base_path('storage/app/private/certs/system_cert.key');
-
-        if (!file_exists($rootCertPath) || !file_exists($rootKeyPath)) {
-            throw new \RuntimeException('No se encontró el certificado o llave raíz de BonosWeb CA. Ejecute bonosweb:generate-root-ca.');
-        }
-
-        $rootCert = file_get_contents($rootCertPath);
-        $rootKey  = file_get_contents($rootKeyPath);
-
-        // Firmar con Root CA
-        $x509 = openssl_csr_sign($csr, $rootCert, $rootKey, 1825, ['digest_alg' => 'sha256']);
-
-        // 3. Exportar como PKCS#12 (cert + key en un solo archivo, sin contraseña)
-        // Incluimos el Root CA en 'extracerts'
-        openssl_pkcs12_export($x509, $pfxContent, $privkey, '', ['extracerts' => $rootCert]);
-
-        // 4. Persistir en el disco del tenant y actualizar la BD
-        $pfxRelPath = sprintf('certs/companies/company_%d_%s.pfx', $companyId, now()->format('Ymd_His'));
-
-        $tenant->run(function () use ($companyId, $pfxContent, $pfxRelPath) {
-            // Storage::disk('local') en contexto tenant apunta a
-            // storage/tenant{id}/app/ — no requiere symlink.
-            Storage::disk('local')->put($pfxRelPath, $pfxContent);
-
-            \App\Models\Company::withoutGlobalScope(CurrentCompanyScope::class)
-                ->where('id', $companyId)
-                ->update([
-                    'signature_pfx_path'     => $pfxRelPath,
-                    'signature_pfx_password' => '', // sin contraseña: la clave no está cifrada
-                ]);
-        });
     }
 
     public function openEditModal($id)
