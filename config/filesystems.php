@@ -60,6 +60,30 @@ return [
             'report' => false,
         ],
 
+        'gcs' => [
+            'driver' => 'gcs',
+            'key_file_path' => base_path(env('GOOGLE_CLOUD_STORAGE_SECURITY_KEY_FILE')), // path to your json key file
+            'project_id' => env('GOOGLE_CLOUD_PROJECT_ID'),
+            'bucket' => env('GOOGLE_CLOUD_STORAGE_BUCKET'),
+            'path_prefix' => env('GOOGLE_CLOUD_STORAGE_PATH_PREFIX', ''), // optional: /dir/name
+            'storage_api_uri' => env('GOOGLE_CLOUD_STORAGE_API_URI', null), // see: Public URLs below
+            'apiEndpoint' => env('GOOGLE_CLOUD_STORAGE_API_ENDPOINT', null), // set storageClient apiEndpoint
+            'uniform_bucket_level_access' => true, // Habilita UBLA y evita el envío de ACLs obsoletos
+            'visibilityHandler' => \League\Flysystem\GoogleCloudStorage\UniformBucketLevelAccessVisibility::class,
+            'throw' => true,
+        ],
+
+        'gcs_sql_backups' => [
+            'driver' => 'gcs',
+            'key_file_path' => base_path(env('GOOGLE_CLOUD_STORAGE_SECURITY_KEY_FILE')),
+            'project_id' => env('GOOGLE_CLOUD_PROJECT_ID'),
+            'bucket' => env('GOOGLE_CLOUD_STORAGE_SQL_BACKUP_BUCKET', 'bonosweb-backups-sql'),
+            'path_prefix' => '',
+            'uniform_bucket_level_access' => true,
+            'visibilityHandler' => \League\Flysystem\GoogleCloudStorage\UniformBucketLevelAccessVisibility::class,
+            'throw' => true,
+        ],
+
     ],
 
     /*

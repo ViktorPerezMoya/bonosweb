@@ -160,6 +160,8 @@ class MisBonos extends Component
                 'signed_at' => now(),
             ]);
 
+            \App\Jobs\BackupPayslipToGcs::dispatch($payslip->id, tenant('id'));
+
             \Illuminate\Support\Facades\Log::info("Recibo firmado exitosamente en BD. ID: " . $this->selectedPayslipId);
             session()->flash('success', 'Recibo firmado correctamente.');
             $this->dispatch('signature-success');

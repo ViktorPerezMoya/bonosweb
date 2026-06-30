@@ -105,6 +105,7 @@ return [
         'disks' => [
             'local',
             'public',
+            'gcs',
             // 's3',
         ],
 

@@ -39,6 +39,7 @@
         <li><a href="/empresas" class="nav-link {{ request()->is('empresas') ? 'active' : '' }}"><i class="ri-building-4-line"></i> Empresas</a></li>
         <li><a href="/configuracion/branding" class="nav-link {{ request()->is('configuracion/branding') ? 'active' : '' }}"><i class="ri-palette-line"></i> Identidad Visual</a></li>
         <li><a href="/configuracion/motivos-disconformidad" class="nav-link {{ request()->is('configuracion/motivos-disconformidad') ? 'active' : '' }}"><i class="ri-question-answer-line"></i> Motivos Disconformidad</a></li>
+        <li><a href="/configuracion/backups" class="nav-link {{ request()->is('configuracion/backups') ? 'active' : '' }}"><i class="ri-archive-line"></i> Copias de Seguridad</a></li>
         @endif
         <li class="pt-2"><div class="border-t border-white/10"></div></li>
         @if(auth()->user()->role === 'admin')

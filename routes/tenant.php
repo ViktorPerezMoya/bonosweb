@@ -102,6 +102,7 @@ Route::middleware([
         Route::middleware('tenant.admin')->group(function () {
             Route::get('/configuracion/branding', App\Livewire\Tenant\BrandingSettings::class)->name('branding.settings');
             Route::get('/configuracion/motivos-disconformidad', App\Livewire\Tenant\DisagreementReasons::class)->name('disagreement-reasons');
+            Route::get('/configuracion/backups', App\Livewire\Tenant\BackupPortal::class)->name('backups.portal');
         });
 
         // Certificado Raíz (accesible para admin y rrhh)

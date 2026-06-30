@@ -26,3 +26,6 @@ Schedule::job(new SuspendOverdueTenantsJob)->dailyAt('08:00');
 
 // Renovación automática de certificados digitales para empleados a las 02:00 hs
 Schedule::command('bonosweb:renew-employee-certs')->dailyAt('02:00');
+
+// Respaldo completo de bases de datos a las 01:00 hs
+Schedule::command('backup:databases')->dailyAt('01:00');

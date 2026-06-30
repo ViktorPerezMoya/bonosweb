@@ -13,6 +13,7 @@
         "setasign/fpdi": "^2.6",
         "smalot/pdfparser": "^2.12",
         "spatie/laravel-activitylog": "^4.12",
+        "spatie/laravel-google-cloud-storage": "^2.3",
         "stancl/tenancy": "^3.10",
         "tecnickcom/tcpdf": "^6.11"
     },

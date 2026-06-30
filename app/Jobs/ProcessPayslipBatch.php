@@ -402,6 +402,8 @@ class ProcessPayslipBatch implements ShouldQueue
             ]);
         }
 
+        \App\Jobs\BackupPayslipToGcs::dispatch($newPayslip->id, tenant('id'));
+
         return true;
     }
 
